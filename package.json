@@ -13,5 +13,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "db:migrate": "npm run db:migrate --workspace=api",
     "db:seed": "npm run db:seed --workspace=api"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
   }
 }
