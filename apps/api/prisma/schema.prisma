@@ -8,21 +8,23 @@ datasource db {
 }
 
 model Tenant {
-  id           String               @id @default(uuid())
-  name         String
-  slug         String               @unique
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  users        User[]
-  roles        Role[]
-  companies    Company[]
-  customers    Customer[]
-  products     Product[]
-  orders       Order[]
-  invoices     Invoice[]
-  integrations IntegrationAccount[]
-  subscription Subscription?
-  usage        UsageCounter[]
+  id            String               @id @default(uuid())
+  name          String
+  slug          String               @unique
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  users         User[]
+  roles         Role[]
+  companies     Company[]
+  customers     Customer[]
+  products      Product[]
+  orders        Order[]
+  invoices      Invoice[]
+  integrations  IntegrationAccount[]
+  subscription  Subscription?
+  usage         UsageCounter[]
+  legalArchives LegalArchive[]
+  auditLogs     AuditLog[]
 }
 
 model User {
@@ -158,15 +160,16 @@ model OrderItem {
 }
 
 model Invoice {
-  id        String   @id @default(uuid())
-  type      String // NFE or NFSE
-  status    String   @default("DRAFT")
-  orderId   String?
-  order     Order?   @relation(fields: [orderId], references: [id])
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String        @id @default(uuid())
+  type         String // NFE or NFSE
+  status       String        @default("DRAFT")
+  orderId      String?
+  order        Order?        @relation(fields: [orderId], references: [id])
+  tenantId     String
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  legalArchive LegalArchive?
 }
 
 model IntegrationAccount {
@@ -210,4 +213,26 @@ model UsageCounter {
   emissions Int    @default(0)
 
   @@unique([tenantId, month, year])
+}
+
+model LegalArchive {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  invoiceId String   @unique
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id])
+  xmlBase64 String
+  pdfUrl    String?
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  userId     String?
+  action     String // e.g "ISSUED_NFE", "CANCELED_NFE"
+  resourceId String? // Invoice ID
+  metadata   String? // JSON stringified details
+  createdAt  DateTime @default(now())
 }
