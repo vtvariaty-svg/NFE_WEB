@@ -12,7 +12,16 @@ export default function ProductsPage() {
     const [name, setName] = useState("");
     const [price, setPrice] = useState("");
     const [sku, setSku] = useState("");
+
+    // BR Fiscal Fields
     const [ncm, setNcm] = useState("");
+    const [cest, setCest] = useState("");
+    const [cfop, setCfop] = useState("");
+    const [unit, setUnit] = useState("UN");
+    const [icmsOrigin, setIcmsOrigin] = useState("0");
+    const [icmsCst, setIcmsCst] = useState("");
+    const [pisCst, setPisCst] = useState("");
+    const [cofinsCst, setCofinsCst] = useState("");
 
     const fetchProducts = async () => {
         try {
@@ -35,10 +44,12 @@ export default function ProductsPage() {
                 name,
                 price: parseFloat(price),
                 sku,
-                ncm
+                ncm, cest, cfop, unit, icmsOrigin, icmsCst, pisCst, cofinsCst
             });
             setIsModalOpen(false);
-            setName(""); setPrice(""); setSku(""); setNcm("");
+            setName(""); setPrice(""); setSku(""); setNcm(""); setCest("");
+            setCfop(""); setUnit("UN"); setIcmsOrigin("0"); setIcmsCst("");
+            setPisCst(""); setCofinsCst("");
             fetchProducts();
         } catch (err) {
             alert("Erro ao criar produto");
@@ -109,10 +120,60 @@ export default function ProductsPage() {
                         <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle p-6">
                             <h3 className="text-lg font-medium leading-6 text-slate-900 mb-4">Novo Produto</h3>
                             <form onSubmit={handleCreate} className="space-y-4">
-                                <div><label className="block text-sm">Nome</label><input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full border p-2 rounded" /></div>
-                                <div><label className="block text-sm">Preço</label><input type="number" step="0.01" required value={price} onChange={e => setPrice(e.target.value)} className="w-full border p-2 rounded" /></div>
-                                <div><label className="block text-sm">SKU (Opcional)</label><input type="text" value={sku} onChange={e => setSku(e.target.value)} className="w-full border p-2 rounded" /></div>
-                                <div><label className="block text-sm">NCM (Opcional)</label><input type="text" value={ncm} onChange={e => setNcm(e.target.value)} className="w-full border p-2 rounded" /></div>
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div className="sm:col-span-2">
+                                        <label className="block text-sm font-medium text-slate-700">Nome do Produto</label>
+                                        <input type="text" required value={name} onChange={e => setName(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700">Preço (R$)</label>
+                                        <input type="number" step="0.01" required value={price} onChange={e => setPrice(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700">Código SKU / Interno</label>
+                                        <input type="text" value={sku} onChange={e => setSku(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700">Unidade (Ex: UN, KG)</label>
+                                        <input type="text" required value={unit} onChange={e => setUnit(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border uppercase" />
+                                    </div>
+
+                                    <h4 className="sm:col-span-2 text-sm font-bold text-slate-900 mt-2 border-b pb-1">Tributação (NF-e)</h4>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700">NCM</label>
+                                        <input type="text" value={ncm} onChange={e => setNcm(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700">CEST</label>
+                                        <input type="text" value={cest} onChange={e => setCest(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700">CFOP Padrão</label>
+                                        <input type="text" value={cfop} onChange={e => setCfop(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="5102, 6102" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700">Origem ICMS</label>
+                                        <select value={icmsOrigin} onChange={e => setIcmsOrigin(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border bg-white">
+                                            <option value="0">0 - Nacional</option>
+                                            <option value="1">1 - Estrangeira Importação</option>
+                                            <option value="2">2 - Estrangeira Interno</option>
+                                        </select>
+                                    </div>
+                                    <div className="sm:col-span-2 grid grid-cols-3 gap-2">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700">ICMS CST/CSOSN</label>
+                                            <input type="text" value={icmsCst} onChange={e => setIcmsCst(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="102, 400" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700">PIS CST</label>
+                                            <input type="text" value={pisCst} onChange={e => setPisCst(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="99, 49" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700">COFINS CST</label>
+                                            <input type="text" value={cofinsCst} onChange={e => setCofinsCst(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="99, 49" />
+                                        </div>
+                                    </div>
+                                </div>
 
                                 <div className="mt-5 sm:grid sm:grid-cols-2 sm:gap-3">
                                     <button type="submit" className="w-full rounded-md bg-blue-600 px-4 py-2 text-white">Salvar</button>

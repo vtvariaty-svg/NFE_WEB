@@ -20,6 +20,18 @@ export default function CompaniesPage() {
     const [name, setName] = useState("");
     const [document, setDocument] = useState("");
 
+    // BR Fiscal Fields
+    const [ie, setIe] = useState("");
+    const [cnae, setCnae] = useState("");
+    const [crt, setCrt] = useState("");
+    const [zipCode, setZipCode] = useState("");
+    const [street, setStreet] = useState("");
+    const [number, setNumber] = useState("");
+    const [district, setDistrict] = useState("");
+    const [city, setCity] = useState("");
+    const [state, setState] = useState("");
+    const [ibgeCode, setIbgeCode] = useState("");
+
     const fetchCompanies = async () => {
         try {
             const res = await api.get("/companies");
@@ -38,10 +50,14 @@ export default function CompaniesPage() {
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await api.post("/companies", { name, document });
+            await api.post("/companies", {
+                name, document, ie, cnae, crt,
+                zipCode, street, number, district, city, state, ibgeCode
+            });
             setIsModalOpen(false);
-            setName("");
-            setDocument("");
+            setName(""); setDocument(""); setIe(""); setCnae(""); setCrt("");
+            setZipCode(""); setStreet(""); setNumber(""); setDistrict("");
+            setCity(""); setState(""); setIbgeCode("");
             fetchCompanies();
         } catch (err) {
             alert("Erro ao criar empresa");
@@ -126,26 +142,59 @@ export default function CompaniesPage() {
                                         </h3>
                                         <div className="mt-4">
                                             <form onSubmit={handleCreate} className="space-y-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-slate-700">Razão Social / Nome</label>
-                                                    <input
-                                                        type="text"
-                                                        required
-                                                        value={name}
-                                                        onChange={(e) => setName(e.target.value)}
-                                                        className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-slate-700">CNPJ</label>
-                                                    <input
-                                                        type="text"
-                                                        required
-                                                        value={document}
-                                                        onChange={(e) => setDocument(e.target.value)}
-                                                        className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border"
-                                                        placeholder="00.000.000/0001-00"
-                                                    />
+                                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-700">Razão Social</label>
+                                                        <input type="text" required value={name} onChange={e => setName(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-700">CNPJ</label>
+                                                        <input type="text" required value={document} onChange={e => setDocument(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="00.000.000/0001-00" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-700">Inscrição Estadual</label>
+                                                        <input type="text" value={ie} onChange={e => setIe(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-700">CNAE Principal</label>
+                                                        <input type="text" value={cnae} onChange={e => setCnae(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                                    </div>
+                                                    <div className="sm:col-span-2">
+                                                        <label className="block text-sm font-medium text-slate-700">Regime Tributário</label>
+                                                        <select value={crt} onChange={e => setCrt(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border bg-white">
+                                                            <option value="">Selecione...</option>
+                                                            <option value="1">Simples Nacional</option>
+                                                            <option value="2">Simples Nacional - Excesso de Sublimite</option>
+                                                            <option value="3">Regime Normal (Lucro Presumido/Real)</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-700">CEP</label>
+                                                        <input type="text" value={zipCode} onChange={e => setZipCode(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-700">Logradouro / Rua</label>
+                                                        <input type="text" value={street} onChange={e => setStreet(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-700">Número</label>
+                                                        <input type="text" value={number} onChange={e => setNumber(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-700">Bairro</label>
+                                                        <input type="text" value={district} onChange={e => setDistrict(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-700">Cidade e UF</label>
+                                                        <div className="flex gap-2">
+                                                            <input type="text" value={city} placeholder="Cidade" onChange={e => setCity(e.target.value)} className="mt-1 block w-2/3 rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                                            <input type="text" value={state} placeholder="UF" onChange={e => setState(e.target.value)} className="mt-1 block w-1/3 rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border uppercase" maxLength={2} />
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-slate-700">Cód IBGE Mun. (Obrig)</label>
+                                                        <input type="text" value={ibgeCode} onChange={e => setIbgeCode(e.target.value)} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                                    </div>
                                                 </div>
                                                 <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
                                                     <button

@@ -39,7 +39,8 @@ export default function NewInvoicePage() {
 
         try {
             await api.post(`/invoices/${selectedOrder}/issue`, {
-                companyId: selectedCompany
+                companyId: selectedCompany,
+                type: 'NFE'
             });
             alert("Nota fiscal emitida com sucesso!");
             router.push("/dashboard/invoices");
