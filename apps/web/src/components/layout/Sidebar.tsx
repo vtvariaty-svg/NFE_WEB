@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "react-tailwind-link"; // We'll just define standard <a> or next/link
 import LinkNext from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -42,8 +41,8 @@ export function Sidebar() {
                                 key={item.name}
                                 href={item.href}
                                 className={`${isActive
-                                        ? "bg-blue-50 text-blue-700"
-                                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                    ? "bg-blue-50 text-blue-700"
+                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                                     } group flex items-center rounded-md px-2 py-2.5 text-sm font-medium transition-colors`}
                             >
                                 <item.icon
