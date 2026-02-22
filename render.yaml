@@ -1,3 +1,5 @@
+services:
+  - type: web
     name: nfe-api
     env: node
     plan: free
