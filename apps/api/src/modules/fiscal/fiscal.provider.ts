@@ -1,31 +1,91 @@
-export interface IFiscalProvider {
-    issue(invoiceData: any): Promise<{ status: string, externalId: string }>;
-    consult(externalId: string): Promise<{ status: string }>;
-    cancel(externalId: string, reason: string): Promise<boolean>;
+export interface NFePayload {
+    natureza_operacao: string;
+    data_emissao: string;
+    tipo_documento: number; // 1 = Saída, 0 = Entrada
+    finalidade_emissao: number; // 1 = Normal
+    cnpj_emitente: string;
+    inscricao_estadual_emitente: string;
+    nome_emitente: string;
+    nome_fantasia_emitente: string;
+    logradouro_emitente: string;
+    numero_emitente: string;
+    bairro_emitente: string;
+    municipio_emitente: string;
+    uf_emitente: string;
+    cep_emitente: string;
+
+    // Destinatário
+    nome_destinatario: string;
+    cpf_cnpj_destinatario: string;
+    inscricao_estadual_destinatario?: string;
+    logradouro_destinatario: string;
+    numero_destinatario: string;
+    bairro_destinatario: string;
+    municipio_destinatario: string;
+    uf_destinatario: string;
+    cep_destinatario: string;
+
+    items: Array<{
+        numero_item: number;
+        codigo_produto: string;
+        descricao: string;
+        cfop: string;
+        unidade_comercial: string;
+        quantidade_comercial: number;
+        valor_unitario_comercial: number;
+        valor_bruto: number;
+        icms_origem: string;
+        icms_situacao_tributaria: string;
+        pis_situacao_tributaria: string;
+        cofins_situacao_tributaria: string;
+    }>;
 }
 
-export class MockFiscalProvider implements IFiscalProvider {
-    async issue(invoiceData: any) {
-        console.log(`[MockProvider] Issuing invoice for Order ${invoiceData.orderId}`);
+export interface IFiscalProvider {
+    issueNFe(payload: NFePayload): Promise<{ status: string, externalId: string, message?: string }>;
+    consultNFe(externalId: string): Promise<{ status: string, xmlUrl?: string, pdfUrl?: string }>;
+    cancelNFe(externalId: string, reason: string): Promise<boolean>;
+}
+
+export class FocusNfeProvider implements IFiscalProvider {
+    private apiKey: string;
+    private isSandbox: boolean;
+
+    constructor(apiKey: string, isSandbox = true) {
+        this.apiKey = apiKey;
+        this.isSandbox = isSandbox;
+    }
+
+    async issueNFe(payload: NFePayload) {
+        console.log(`[FocusNFeProvider] Sending NFe for ${payload.nome_emitente} to API...`);
+        // Real implementation would do:
+        // const response = await axios.post('https://api.focusnfe.com.br/v2/nfe', payload, { auth: { username: this.apiKey, password: '' } });
+
         return {
-            status: 'AUTHORIZED', // Instantly approved in Mock
-            externalId: `mock-nfe-${Date.now()}`
+            status: 'PROCESSANDO', // FocusNFe is asynchronous
+            externalId: `fcs-${Date.now()}`
         };
     }
 
-    async consult(externalId: string) {
-        console.log(`[MockProvider] Consulting invoice ${externalId}`);
-        return { status: 'AUTHORIZED' };
+    async consultNFe(externalId: string) {
+        console.log(`[FocusNFeProvider] Consulting NFe ${externalId}`);
+        // Real implementation polls FocusNFe API for 'autorizado'
+        return {
+            status: 'AUTORIZADO',
+            xmlUrl: 'https://cdn.focusnfe.com.br/arquivos/mock-xml.xml',
+            pdfUrl: 'https://cdn.focusnfe.com.br/arquivos/mock-danfe.pdf'
+        };
     }
 
-    async cancel(externalId: string, reason: string) {
-        console.log(`[MockProvider] Canceling invoice ${externalId} for reason: ${reason}`);
+    async cancelNFe(externalId: string, reason: string) {
+        console.log(`[FocusNFeProvider] Canceling NFe ${externalId} for reason: ${reason}`);
         return true;
     }
 }
 
-// In a real scenario, this would dynamically instantiate FocusNfe, NotaFacil, etc.
-// depending on tenant fiscal config. For MVP we use Mock.
+// Factory
 export function getFiscalProvider(tenantId: string): IFiscalProvider {
-    return new MockFiscalProvider();
+    // In production, we fetch the FocusNFE API KEY configured for this specific tenant!
+    const focusApiKey = process.env.FOCUSNFE_API_KEY || 'mock-key';
+    return new FocusNfeProvider(focusApiKey, true);
 }

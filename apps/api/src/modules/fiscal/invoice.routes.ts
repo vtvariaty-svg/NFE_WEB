@@ -13,31 +13,74 @@ export async function invoiceRoutes(app: FastifyInstance) {
     app.post('/:orderId/issue', {
         schema: {
             params: z.object({ orderId: z.string() }),
-            body: z.object({ type: z.enum(['NFE', 'NFSE']) })
+            body: z.object({ type: z.enum(['NFE', 'NFSE']), companyId: z.string() })
         },
         preHandler: [checkUsageLimit]
     }, async (request, reply) => {
         const { orderId } = request.params as any;
-        const { type } = request.body as any;
+        const { type, companyId } = request.body as any;
         const tenantId = (request as any).tenantId;
 
-        const order = await prisma.order.findFirst({ where: { id: orderId, tenantId } });
+        const order = await prisma.order.findFirst({
+            where: { id: orderId, tenantId },
+            include: { items: { include: { product: true } } }
+        });
         if (!order) return reply.status(404).send({ message: 'Order not found' });
 
-        // Instanciate our Fiscal Provider for this tenant
+        const company = await prisma.company.findFirst({ where: { id: companyId, tenantId } });
+        if (!company) return reply.status(404).send({ message: 'Company not found' });
+
+        // Mocking a customer to simplify the boilerplate. In reality, order needs a customerId
+        const customer = await prisma.customer.findFirst({ where: { tenantId } });
+        if (!customer) return reply.status(400).send({ message: 'No customer available' });
+
         const provider = getFiscalProvider(tenantId);
 
-        // Abstract Payload Building... In a real system, map DB data to NFe layout
+        // Map DB data to FocusNFe layout
         const payload = {
-            orderId: order.id,
-            total: order.total,
-            type
+            natureza_operacao: "Venda de Mercadoria",
+            data_emissao: new Date().toISOString(),
+            tipo_documento: 1,
+            finalidade_emissao: 1,
+            cnpj_emitente: company.document.replace(/\D/g, ''),
+            inscricao_estadual_emitente: company.ie || "ISENTO",
+            nome_emitente: company.name,
+            nome_fantasia_emitente: company.name,
+            logradouro_emitente: company.street || "Rua Teste",
+            numero_emitente: company.number || "123",
+            bairro_emitente: company.district || "Centro",
+            municipio_emitente: company.city || "São Paulo",
+            uf_emitente: company.state || "SP",
+            cep_emitente: company.zipCode?.replace(/\D/g, '') || "01000000",
+
+            nome_destinatario: customer.name,
+            cpf_cnpj_destinatario: customer.document.replace(/\D/g, ''),
+            inscricao_estadual_destinatario: customer.type === "JURIDICA" && customer.ie ? customer.ie : undefined,
+            logradouro_destinatario: customer.street || "Rua Cliente",
+            numero_destinatario: customer.number || "456",
+            bairro_destinatario: customer.district || "Bairro",
+            municipio_destinatario: customer.city || "Rio de Janeiro",
+            uf_destinatario: customer.state || "RJ",
+            cep_destinatario: customer.zipCode?.replace(/\D/g, '') || "20000000",
+
+            items: order.items.map((item, index) => ({
+                numero_item: index + 1,
+                codigo_produto: item.product.sku || item.productId,
+                descricao: item.product.name,
+                cfop: item.product.cfop || "5102",
+                unidade_comercial: item.product.unit,
+                quantidade_comercial: item.quantity,
+                valor_unitario_comercial: item.price,
+                valor_bruto: item.price * item.quantity,
+                icms_origem: item.product.icmsOrigin || "0",
+                icms_situacao_tributaria: item.product.icmsCst || "102",
+                pis_situacao_tributaria: item.product.pisCst || "99",
+                cofins_situacao_tributaria: item.product.cofinsCst || "99",
+            }))
         };
 
-        // Attempt Issue
-        const providerResult = await provider.issue(payload);
+        const providerResult = await provider.issueNFe(payload);
 
-        // Save state locally
         const invoice = await prisma.invoice.create({
             data: {
                 type,
@@ -91,7 +134,7 @@ export async function invoiceRoutes(app: FastifyInstance) {
         if (!invoice) return reply.status(404).send();
 
         const provider = getFiscalProvider(tenantId);
-        const success = await provider.cancel(invoiceId, reason);
+        const success = await provider.cancelNFe(invoiceId, reason);
 
         if (success) {
             await prisma.invoice.update({
