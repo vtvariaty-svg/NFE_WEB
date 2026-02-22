@@ -26,7 +26,7 @@ export async function orderRoutes(app: FastifyInstance) {
             where: { id: { in: items.map((i: any) => i.productId) }, tenantId }
         });
 
-        const productMap = new Map(products.map(p => [p.id, p]));
+        const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
         const orderItemsRecord: any[] = [];
 
         for (const item of items) {
