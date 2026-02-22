@@ -14,7 +14,7 @@
     "dependencies": {
         "@fastify/cors": "latest",
         "@fastify/jwt": "latest",
-        "@prisma/client": "latest",
+        "@prisma/client": "^5.22.0",
         "dotenv": "latest",
         "fastify": "latest",
         "fastify-type-provider-zod": "latest",
@@ -22,7 +22,7 @@
     },
     "devDependencies": {
         "@types/node": "latest",
-        "prisma": "latest",
+        "prisma": "^5.22.0",
         "tsx": "latest",
         "typescript": "latest"
     },

@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: nfe-api
+    env: node
+    plan: free
+    rootDir: apps/api
+    buildCommand: npm install && npx prisma generate && npx prisma db push && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+
+  - type: web
+    name: nfe-web
+    env: node
+    plan: free
+    rootDir: apps/web
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: nfe-api
+          envVarKey: RENDER_EXTERNAL_URL

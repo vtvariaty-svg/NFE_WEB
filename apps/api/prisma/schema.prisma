@@ -21,6 +21,8 @@ model Tenant {
   orders    Order[]
   invoices  Invoice[]
   integrations IntegrationAccount[]
+  subscription Subscription?
+  usage     UsageCounter[]
 }
 
 model User {
@@ -132,5 +134,37 @@ model IntegrationAccount {
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Plan {
+  id              String   @id @default(uuid())
+  name            String   // FREE, PRO
+  price           Float
+  maxInvoices     Int
+  maxIntegrations Int
+  subscriptions   Subscription[]
+}
+
+model Subscription {
+  id        String   @id @default(uuid())
+  tenantId  String   @unique
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  planId    String
+  plan      Plan     @relation(fields: [planId], references: [id])
+  status    String   @default("ACTIVE") // ACTIVE, PAST_DUE, CANCELED
+  currentPeriodStart DateTime @default(now())
+  currentPeriodEnd   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UsageCounter {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  month       Int
+  year        Int
+  emissions   Int      @default(0)
+  @@unique([tenantId, month, year])
 }
 

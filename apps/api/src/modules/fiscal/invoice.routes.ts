@@ -4,6 +4,8 @@ import { prisma } from '../../index.js';
 import tenantMiddleware from '../tenant/tenant.middleware.js';
 import { getFiscalProvider } from './fiscal.provider.js';
 
+import { checkUsageLimit } from '../billing/billing.middleware.js';
+
 export async function invoiceRoutes(app: FastifyInstance) {
     app.addHook('onRequest', app.authenticate);
     app.addHook('onRequest', tenantMiddleware);
@@ -12,7 +14,8 @@ export async function invoiceRoutes(app: FastifyInstance) {
         schema: {
             params: z.object({ orderId: z.string() }),
             body: z.object({ type: z.enum(['NFE', 'NFSE']) })
-        }
+        },
+        preHandler: [checkUsageLimit]
     }, async (request, reply) => {
         const { orderId } = request.params as any;
         const { type } = request.body as any;
@@ -43,6 +46,27 @@ export async function invoiceRoutes(app: FastifyInstance) {
                 tenantId
             }
         });
+
+        if (providerResult.status === 'AUTHORIZED') {
+            // Increment Usage
+            const now = new Date();
+            await prisma.usageCounter.upsert({
+                where: {
+                    tenantId_month_year: {
+                        tenantId,
+                        month: now.getMonth() + 1,
+                        year: now.getFullYear()
+                    }
+                },
+                update: { emissions: { increment: 1 } },
+                create: {
+                    tenantId,
+                    month: now.getMonth() + 1,
+                    year: now.getFullYear(),
+                    emissions: 1
+                }
+            });
+        }
 
         return reply.status(201).send(invoice);
     });

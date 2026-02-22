@@ -10,6 +10,10 @@ import { customerRoutes } from './modules/customer/customer.routes.js';
 import { productRoutes } from './modules/product/product.routes.js';
 import { companyRoutes } from './modules/company/company.routes.js';
 import { tenantRoutes } from './modules/tenant/tenant.routes.js';
+import { invoiceRoutes } from './modules/fiscal/invoice.routes.js';
+import { orderRoutes } from './modules/order/order.routes.js';
+import { billingRoutes } from './modules/billing/billing.routes.js';
+import { integrationRoutes } from './modules/integrations/integrations.routes.js';
 
 dotenv.config();
 
@@ -41,9 +45,6 @@ async function buildServer() {
 
     fastify.get('/health', async () => ({ status: 'ok', time: new Date().toISOString() }));
 
-    import { invoiceRoutes } from './modules/fiscal/invoice.routes.js';
-    import { orderRoutes } from './modules/order/order.routes.js';
-
     // Register Modules
     fastify.register(authRoutes, { prefix: '/auth' });
     fastify.register(tenantRoutes, { prefix: '/tenants' });
@@ -52,6 +53,8 @@ async function buildServer() {
     fastify.register(productRoutes, { prefix: '/products' });
     fastify.register(orderRoutes, { prefix: '/orders' });
     fastify.register(invoiceRoutes, { prefix: '/invoices' });
+    fastify.register(billingRoutes, { prefix: '/billing' });
+    fastify.register(integrationRoutes, { prefix: '/integrations' });
 
     return fastify;
 }
