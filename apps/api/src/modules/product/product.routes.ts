@@ -13,7 +13,14 @@ export async function productRoutes(app: FastifyInstance) {
                 name: z.string(),
                 price: z.number(),
                 sku: z.string().optional(),
-                ncm: z.string().optional()
+                ncm: z.string().optional(),
+                cest: z.string().optional(),
+                cfop: z.string().optional(),
+                unit: z.string().optional(),
+                icmsCst: z.string().optional(),
+                pisCst: z.string().optional(),
+                cofinsCst: z.string().optional(),
+                icmsOrigin: z.string().optional()
             })
         }
     }, async (request, reply) => {

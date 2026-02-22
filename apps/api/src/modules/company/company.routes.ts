@@ -11,7 +11,19 @@ export async function companyRoutes(app: FastifyInstance) {
         schema: {
             body: z.object({
                 name: z.string(),
-                document: z.string() // CNPJ
+                document: z.string(), // CNPJ
+                ie: z.string().optional(),
+                cnae: z.string().optional(),
+                crt: z.string().optional(),
+                street: z.string().optional(),
+                number: z.string().optional(),
+                complement: z.string().optional(),
+                district: z.string().optional(),
+                city: z.string().optional(),
+                state: z.string().optional(),
+                zipCode: z.string().optional(),
+                ibgeCode: z.string().optional(),
+                phone: z.string().optional()
             })
         }
     }, async (request, reply) => {
@@ -30,29 +42,4 @@ export async function companyRoutes(app: FastifyInstance) {
         return { data: companies };
     });
 
-    app.post('/:id/certificate', {
-        schema: {
-            params: z.object({ id: z.string() }),
-            body: z.object({
-                pfxBase64: z.string(),
-                password: z.string()
-            })
-        }
-    }, async (request, reply) => {
-        const { id } = request.params as any;
-        const { pfxBase64, password } = request.body as any;
-        const tenantId = (request as any).tenantId;
-
-        // Verify ownership
-        const company = await prisma.company.findFirst({ where: { id, tenantId } });
-        if (!company) return reply.status(404).send();
-
-        const cert = await prisma.certificate.upsert({
-            where: { companyId: id },
-            update: { pfxBase64, password },
-            create: { pfxBase64, password, companyId: id }
-        });
-
-        return reply.status(200).send({ message: 'Certificate saved' });
-    });
 }

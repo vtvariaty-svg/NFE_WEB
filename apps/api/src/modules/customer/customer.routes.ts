@@ -11,15 +11,28 @@ export async function customerRoutes(app: FastifyInstance) {
         schema: {
             body: z.object({
                 name: z.string(),
-                document: z.string()
+                document: z.string(),
+                type: z.string().optional(),
+                ie: z.string().optional(),
+                im: z.string().optional(),
+                email: z.string().optional(),
+                street: z.string().optional(),
+                number: z.string().optional(),
+                complement: z.string().optional(),
+                district: z.string().optional(),
+                city: z.string().optional(),
+                state: z.string().optional(),
+                zipCode: z.string().optional(),
+                ibgeCode: z.string().optional(),
+                phone: z.string().optional()
             })
         }
     }, async (request, reply) => {
-        const { name, document } = request.body as any;
+        const data = request.body as any;
         const tenantId = (request as any).tenantId;
 
         const customer = await prisma.customer.create({
-            data: { name, document, tenantId }
+            data: { ...data, tenantId }
         });
         return reply.status(201).send(customer);
     });

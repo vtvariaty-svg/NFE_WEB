@@ -8,21 +8,21 @@ datasource db {
 }
 
 model Tenant {
-  id        String   @id @default(uuid())
-  name      String
-  slug      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  users     User[]
-  roles     Role[]
-  companies Company[]
-  customers Customer[]
-  products  Product[]
-  orders    Order[]
-  invoices  Invoice[]
+  id           String               @id @default(uuid())
+  name         String
+  slug         String               @unique
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  users        User[]
+  roles        Role[]
+  companies    Company[]
+  customers    Customer[]
+  products     Product[]
+  orders       Order[]
+  invoices     Invoice[]
   integrations IntegrationAccount[]
   subscription Subscription?
-  usage     UsageCounter[]
+  usage        UsageCounter[]
 }
 
 model User {
@@ -49,30 +49,61 @@ model Role {
 }
 
 model Company {
-  id        String   @id @default(uuid())
-  document  String   @unique // CNPJ
-  name      String
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  id       String  @id @default(uuid())
+  document String  @unique // CNPJ
+  name     String
+  ie       String? // Inscrição Estadual
+  cnae     String? // Classificação Nacional de Atividades Econômicas
+  crt      String? // Código de Regime Tributário (1-Simples Nacional, 2-Simples Nacional Ecesso, 3-Regime Normal)
+
+  // Address info required for NFe
+  street     String?
+  number     String?
+  complement String?
+  district   String?
+  city       String?
+  state      String? // UF
+  zipCode    String? // CEP
+  ibgeCode   String? // Código IBGE do município
+  phone      String?
+
+  tenantId    String
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
   certificate Certificate?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 model Certificate {
-  id        String   @id @default(uuid())
-  companyId String   @unique
-  company   Company  @relation(fields: [companyId], references: [id])
+  id        String    @id @default(uuid())
+  companyId String    @unique
+  company   Company   @relation(fields: [companyId], references: [id])
   pfxBase64 String
   password  String
   expiresAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 }
 
 model Customer {
-  id        String   @id @default(uuid())
-  document  String   // CPF or CNPJ
-  name      String
+  id       String  @id @default(uuid())
+  document String // CPF or CNPJ
+  name     String
+  type     String  @default("FISICA") // "FISICA" or "JURIDICA"
+  ie       String? // Inscrição Estadual (Isento, ou o número)
+  im       String? // Inscrição Municipal (para NFSe)
+  email    String?
+
+  // Address info required for NFe
+  street     String?
+  number     String?
+  complement String?
+  district   String?
+  city       String?
+  state      String? // UF
+  zipCode    String? // CEP
+  ibgeCode   String? // Código IBGE do município
+  phone      String?
+
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   createdAt DateTime @default(now())
@@ -80,43 +111,55 @@ model Customer {
 }
 
 model Product {
-  id        String   @id @default(uuid())
-  name      String
-  price     Float
-  sku       String?
-  ncm       String?
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  id    String  @id @default(uuid())
+  name  String
+  price Float
+  sku   String?
+
+  // Fiscal Data
+  ncm  String? // Nomenclatura Comum do Mercosul
+  cest String? // Código Especificador da Substituição Tributária
+  cfop String? // Código Fiscal de Operações e Prestações Padrão
+  unit String  @default("UN") // UN, KG, CX, LT
+
+  // Tax definitions templates (Simples Nacional)
+  icmsCst    String? // ex: 102, 103, 400
+  pisCst     String? // ex: 99, 49
+  cofinsCst  String? // ex: 99, 49
+  icmsOrigin String  @default("0") // 0-Nacional, 1-Estrangeira, etc
+
+  tenantId   String
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
   orderItems OrderItem[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 }
 
 model Order {
-  id        String   @id @default(uuid())
+  id        String      @id @default(uuid())
   total     Float
-  status    String   @default("PENDING")
+  status    String      @default("PENDING")
   tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  tenant    Tenant      @relation(fields: [tenantId], references: [id])
   items     OrderItem[]
   invoices  Invoice[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 }
 
 model OrderItem {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   orderId   String
-  order     Order    @relation(fields: [orderId], references: [id])
+  order     Order   @relation(fields: [orderId], references: [id])
   productId String
-  product   Product  @relation(fields: [productId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
   quantity  Int
   price     Float
 }
 
 model Invoice {
   id        String   @id @default(uuid())
-  type      String   // NFE or NFSE
+  type      String // NFE or NFSE
   status    String   @default("DRAFT")
   orderId   String?
   order     Order?   @relation(fields: [orderId], references: [id])
@@ -128,7 +171,7 @@ model Invoice {
 
 model IntegrationAccount {
   id        String   @id @default(uuid())
-  provider  String   // SHOPEE, TIKTOK
+  provider  String // SHOPEE, TIKTOK, TRAY
   token     String
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
@@ -137,8 +180,8 @@ model IntegrationAccount {
 }
 
 model Plan {
-  id              String   @id @default(uuid())
-  name            String   // FREE, PRO
+  id              String         @id @default(uuid())
+  name            String // FREE, PRO
   price           Float
   maxInvoices     Int
   maxIntegrations Int
@@ -146,25 +189,25 @@ model Plan {
 }
 
 model Subscription {
-  id        String   @id @default(uuid())
-  tenantId  String   @unique
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  planId    String
-  plan      Plan     @relation(fields: [planId], references: [id])
-  status    String   @default("ACTIVE") // ACTIVE, PAST_DUE, CANCELED
+  id                 String   @id @default(uuid())
+  tenantId           String   @unique
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  planId             String
+  plan               Plan     @relation(fields: [planId], references: [id])
+  status             String   @default("ACTIVE") // ACTIVE, PAST_DUE, CANCELED
   currentPeriodStart DateTime @default(now())
   currentPeriodEnd   DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model UsageCounter {
-  id          String   @id @default(uuid())
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id])
-  month       Int
-  year        Int
-  emissions   Int      @default(0)
+  id        String @id @default(uuid())
+  tenantId  String
+  tenant    Tenant @relation(fields: [tenantId], references: [id])
+  month     Int
+  year      Int
+  emissions Int    @default(0)
+
   @@unique([tenantId, month, year])
 }
-

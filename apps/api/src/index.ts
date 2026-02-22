@@ -14,6 +14,7 @@ import { invoiceRoutes } from './modules/fiscal/invoice.routes.js';
 import { orderRoutes } from './modules/order/order.routes.js';
 import { billingRoutes } from './modules/billing/billing.routes.js';
 import { integrationRoutes } from './modules/integrations/integrations.routes.js';
+import { certificateRoutes } from './modules/certificate/certificate.routes.js';
 
 dotenv.config();
 
@@ -49,6 +50,7 @@ async function buildServer() {
     fastify.register(authRoutes, { prefix: '/auth' });
     fastify.register(tenantRoutes, { prefix: '/tenants' });
     fastify.register(companyRoutes, { prefix: '/companies' });
+    fastify.register(certificateRoutes, { prefix: '/certificates' });
     fastify.register(customerRoutes, { prefix: '/customers' });
     fastify.register(productRoutes, { prefix: '/products' });
     fastify.register(orderRoutes, { prefix: '/orders' });
