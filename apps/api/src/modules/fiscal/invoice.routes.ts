@@ -7,143 +7,196 @@ import { getFiscalProvider } from './fiscal.provider.js';
 import { checkUsageLimit } from '../billing/billing.middleware.js';
 
 export async function invoiceRoutes(app: FastifyInstance) {
-    app.addHook('onRequest', app.authenticate);
-    app.addHook('onRequest', tenantMiddleware);
+    // Webhook route must NOT have authentication hooks
+    app.post('/webhook', async (request, reply) => {
+        const body = request.body as any;
+        const ref = body.ref; // Our internal Invoice ID passed to FocusNFe
+        const status = body.status; // 'autorizado', 'erro', 'cancelado', 'processando'
+        const xml = body.xml; // Assuming Focus sends the XML link or base64
+        const pdf = body.pdf;
 
-    app.post('/:orderId/issue', {
-        schema: {
-            params: z.object({ orderId: z.string() }),
-            body: z.object({ type: z.enum(['NFE', 'NFSE']), companyId: z.string() })
-        },
-        preHandler: [checkUsageLimit]
-    }, async (request, reply) => {
-        const { orderId } = request.params as any;
-        const { type, companyId } = request.body as any;
-        const tenantId = (request as any).tenantId;
+        if (!ref || !status) return reply.status(400).send({ message: 'Missing ref or status' });
 
-        const order = await prisma.order.findFirst({
-            where: { id: orderId, tenantId },
-            include: { items: { include: { product: true } } }
-        });
-        if (!order) return reply.status(404).send({ message: 'Order not found' });
+        const invoice = await prisma.invoice.findFirst({ where: { id: ref } });
+        if (!invoice) return reply.status(404).send({ message: 'Invoice not found' });
 
-        const company = await prisma.company.findFirst({ where: { id: companyId, tenantId } });
-        if (!company) return reply.status(404).send({ message: 'Company not found' });
+        let newStatus = invoice.status;
+        if (status === 'autorizado') newStatus = 'AUTHORIZED';
+        if (status === 'erro') newStatus = 'REJECTED';
+        if (status === 'cancelado') newStatus = 'CANCELED';
+        if (status === 'processando') newStatus = 'PROCESSING';
 
-        // Mocking a customer to simplify the boilerplate. In reality, order needs a customerId
-        const customer = await prisma.customer.findFirst({ where: { tenantId } });
-        if (!customer) return reply.status(400).send({ message: 'No customer available' });
-
-        const provider = getFiscalProvider(tenantId);
-
-        // Map DB data to FocusNFe layout
-        const payload = {
-            natureza_operacao: "Venda de Mercadoria",
-            data_emissao: new Date().toISOString(),
-            tipo_documento: 1,
-            finalidade_emissao: 1,
-            cnpj_emitente: company.document.replace(/\D/g, ''),
-            inscricao_estadual_emitente: company.ie || "ISENTO",
-            nome_emitente: company.name,
-            nome_fantasia_emitente: company.name,
-            logradouro_emitente: company.street || "Rua Teste",
-            numero_emitente: company.number || "123",
-            bairro_emitente: company.district || "Centro",
-            municipio_emitente: company.city || "São Paulo",
-            uf_emitente: company.state || "SP",
-            cep_emitente: company.zipCode?.replace(/\D/g, '') || "01000000",
-
-            nome_destinatario: customer.name,
-            cpf_cnpj_destinatario: customer.document.replace(/\D/g, ''),
-            inscricao_estadual_destinatario: customer.type === "JURIDICA" && customer.ie ? customer.ie : undefined,
-            logradouro_destinatario: customer.street || "Rua Cliente",
-            numero_destinatario: customer.number || "456",
-            bairro_destinatario: customer.district || "Bairro",
-            municipio_destinatario: customer.city || "Rio de Janeiro",
-            uf_destinatario: customer.state || "RJ",
-            cep_destinatario: customer.zipCode?.replace(/\D/g, '') || "20000000",
-
-            items: order.items.map((item, index) => ({
-                numero_item: index + 1,
-                codigo_produto: item.product.sku || item.productId,
-                descricao: item.product.name,
-                cfop: item.product.cfop || "5102",
-                unidade_comercial: item.product.unit,
-                quantidade_comercial: item.quantity,
-                valor_unitario_comercial: item.price,
-                valor_bruto: item.price * item.quantity,
-                icms_origem: item.product.icmsOrigin || "0",
-                icms_situacao_tributaria: item.product.icmsCst || "102",
-                pis_situacao_tributaria: item.product.pisCst || "99",
-                cofins_situacao_tributaria: item.product.cofinsCst || "99",
-            }))
-        };
-
-        const providerResult = await provider.issueNFe(payload);
-
-        const invoice = await prisma.invoice.create({
-            data: {
-                type,
-                status: providerResult.status,
-                orderId: order.id,
-                tenantId
-            }
-        });
-
-        if (providerResult.status === 'AUTHORIZED') {
-            // Increment Usage
-            const now = new Date();
-            await prisma.usageCounter.upsert({
-                where: {
-                    tenantId_month_year: {
-                        tenantId,
-                        month: now.getMonth() + 1,
-                        year: now.getFullYear()
-                    }
-                },
-                update: { emissions: { increment: 1 } },
-                create: {
-                    tenantId,
-                    month: now.getMonth() + 1,
-                    year: now.getFullYear(),
-                    emissions: 1
-                }
-            });
-        }
-
-        return reply.status(201).send(invoice);
-    });
-
-    app.get('/', async (request, reply) => {
-        const tenantId = (request as any).tenantId;
-        const invoices = await prisma.invoice.findMany({ where: { tenantId } });
-        return { data: invoices };
-    });
-
-    app.post('/:invoiceId/cancel', {
-        schema: {
-            params: z.object({ invoiceId: z.string() }),
-            body: z.object({ reason: z.string() })
-        }
-    }, async (request, reply) => {
-        const { invoiceId } = request.params as any;
-        const { reason } = request.body as any;
-        const tenantId = (request as any).tenantId;
-
-        const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, tenantId } });
-        if (!invoice) return reply.status(404).send();
-
-        const provider = getFiscalProvider(tenantId);
-        const success = await provider.cancelNFe(invoiceId, reason);
-
-        if (success) {
+        if (newStatus !== invoice.status) {
             await prisma.invoice.update({
                 where: { id: invoice.id },
-                data: { status: 'CANCELED' }
+                data: { status: newStatus }
             });
-            return { message: 'Invoice canceled' };
-        }
 
-        return reply.status(400).send({ message: 'Failed to cancel invoice' });
+            await prisma.auditLog.create({
+                data: {
+                    tenantId: invoice.tenantId,
+                    action: `WEBHOOK_${newStatus}`,
+                    resourceId: invoice.id,
+                    metadata: JSON.stringify(body)
+                }
+            });
+
+            if (newStatus === 'AUTHORIZED' && xml) {
+                await prisma.legalArchive.upsert({
+                    where: { invoiceId: invoice.id },
+                    update: { xmlBase64: xml, pdfUrl: pdf },
+                    create: {
+                        tenantId: invoice.tenantId,
+                        invoiceId: invoice.id,
+                        xmlBase64: xml,
+                        pdfUrl: pdf
+                    }
+                });
+            }
+        }
+        return reply.status(200).send({ message: 'Ack' });
+    });
+
+    // Apply hooks ONLY for the routes defined below this line
+    app.register(async function authenticatedRoutes(childApp) {
+        childApp.addHook('onRequest', childApp.authenticate);
+        childApp.addHook('onRequest', tenantMiddleware);
+
+        childApp.post('/:orderId/issue', {
+            schema: {
+                params: z.object({ orderId: z.string() }),
+                body: z.object({ type: z.enum(['NFE', 'NFSE']), companyId: z.string() })
+            },
+            preHandler: [checkUsageLimit]
+        }, async (request, reply) => {
+            const { orderId } = request.params as any;
+            const { type, companyId } = request.body as any;
+            const tenantId = (request as any).tenantId;
+
+            const order = await prisma.order.findFirst({
+                where: { id: orderId, tenantId },
+                include: { items: { include: { product: true } } }
+            });
+            if (!order) return reply.status(404).send({ message: 'Order not found' });
+
+            const company = await prisma.company.findFirst({ where: { id: companyId, tenantId } });
+            if (!company) return reply.status(404).send({ message: 'Company not found' });
+
+            // Mocking a customer to simplify the boilerplate. In reality, order needs a customerId
+            const customer = await prisma.customer.findFirst({ where: { tenantId } });
+            if (!customer) return reply.status(400).send({ message: 'No customer available' });
+
+            const provider = getFiscalProvider(tenantId);
+
+            // Map DB data to FocusNFe layout
+            const payload = {
+                natureza_operacao: "Venda de Mercadoria",
+                data_emissao: new Date().toISOString(),
+                tipo_documento: 1,
+                finalidade_emissao: 1,
+                cnpj_emitente: company.document.replace(/\D/g, ''),
+                inscricao_estadual_emitente: company.ie || "ISENTO",
+                nome_emitente: company.name,
+                nome_fantasia_emitente: company.name,
+                logradouro_emitente: company.street || "Rua Teste",
+                numero_emitente: company.number || "123",
+                bairro_emitente: company.district || "Centro",
+                municipio_emitente: company.city || "São Paulo",
+                uf_emitente: company.state || "SP",
+                cep_emitente: company.zipCode?.replace(/\D/g, '') || "01000000",
+
+                nome_destinatario: customer.name,
+                cpf_cnpj_destinatario: customer.document.replace(/\D/g, ''),
+                inscricao_estadual_destinatario: customer.type === "JURIDICA" && customer.ie ? customer.ie : undefined,
+                logradouro_destinatario: customer.street || "Rua Cliente",
+                numero_destinatario: customer.number || "456",
+                bairro_destinatario: customer.district || "Bairro",
+                municipio_destinatario: customer.city || "Rio de Janeiro",
+                uf_destinatario: customer.state || "RJ",
+                cep_destinatario: customer.zipCode?.replace(/\D/g, '') || "20000000",
+
+                items: order.items.map((item, index) => ({
+                    numero_item: index + 1,
+                    codigo_produto: item.product.sku || item.productId,
+                    descricao: item.product.name,
+                    cfop: item.product.cfop || "5102",
+                    unidade_comercial: item.product.unit,
+                    quantidade_comercial: item.quantity,
+                    valor_unitario_comercial: item.price,
+                    valor_bruto: item.price * item.quantity,
+                    icms_origem: item.product.icmsOrigin || "0",
+                    icms_situacao_tributaria: item.product.icmsCst || "102",
+                    pis_situacao_tributaria: item.product.pisCst || "99",
+                    cofins_situacao_tributaria: item.product.cofinsCst || "99",
+                }))
+            };
+
+            const providerResult = await provider.issueNFe(payload);
+
+            const invoice = await prisma.invoice.create({
+                data: {
+                    type,
+                    status: providerResult.status,
+                    orderId: order.id,
+                    tenantId
+                }
+            });
+
+            if (providerResult.status === 'AUTHORIZED') {
+                // Increment Usage
+                const now = new Date();
+                await prisma.usageCounter.upsert({
+                    where: {
+                        tenantId_month_year: {
+                            tenantId,
+                            month: now.getMonth() + 1,
+                            year: now.getFullYear()
+                        }
+                    },
+                    update: { emissions: { increment: 1 } },
+                    create: {
+                        tenantId,
+                        month: now.getMonth() + 1,
+                        year: now.getFullYear(),
+                        emissions: 1
+                    }
+                });
+            }
+
+            return reply.status(201).send(invoice);
+        });
+
+        app.get('/', async (request, reply) => {
+            const tenantId = (request as any).tenantId;
+            const invoices = await prisma.invoice.findMany({ where: { tenantId } });
+            return { data: invoices };
+        });
+
+        app.post('/:invoiceId/cancel', {
+            schema: {
+                params: z.object({ invoiceId: z.string() }),
+                body: z.object({ reason: z.string() })
+            }
+        }, async (request, reply) => {
+            const { invoiceId } = request.params as any;
+            const { reason } = request.body as any;
+            const tenantId = (request as any).tenantId;
+
+            const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, tenantId } });
+            if (!invoice) return reply.status(404).send();
+
+            const provider = getFiscalProvider(tenantId);
+            const success = await provider.cancelNFe(invoiceId, reason);
+
+            if (success) {
+                await prisma.invoice.update({
+                    where: { id: invoice.id },
+                    data: { status: 'CANCELED' }
+                });
+                return { message: 'Invoice canceled' };
+            }
+
+            return reply.status(400).send({ message: 'Failed to cancel invoice' });
+        });
     });
 }

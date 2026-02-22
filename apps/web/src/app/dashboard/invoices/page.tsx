@@ -23,6 +23,13 @@ export default function InvoicesPage() {
 
     useEffect(() => {
         fetchInvoices();
+
+        // Polling every 10 seconds to catch Webhook updates
+        const intervalId = setInterval(() => {
+            fetchInvoices();
+        }, 10000);
+
+        return () => clearInterval(intervalId);
     }, []);
 
     const handleCancel = async (orderId: string, invoiceId: string) => {
@@ -41,9 +48,11 @@ export default function InvoicesPage() {
 
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'ISSUED': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Emitida</span>;
-            case 'ERROR': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Erro</span>;
-            case 'CANCELLED': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Cancelada</span>;
+            case 'AUTHORIZED': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Autorizada</span>;
+            case 'PROCESSING': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 animate-pulse">Processando</span>;
+            case 'REJECTED': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Rejeitada</span>;
+            case 'CANCELED': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">Cancelada</span>;
+            case 'DRAFT': return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Rascunho</span>;
             default: return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{status}</span>;
         }
     };
@@ -98,7 +107,7 @@ export default function InvoicesPage() {
                                         <button className="text-blue-600 hover:text-blue-900 p-2 rounded hover:bg-blue-50" title="Consultar XML/PDF (Mock)">
                                             <Search className="h-4 w-4" />
                                         </button>
-                                        {i.status === 'ISSUED' && (
+                                        {i.status === 'AUTHORIZED' && (
                                             <button
                                                 onClick={() => handleCancel(i.orderId, i.id)}
                                                 className="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50" title="Cancelar Nota">
