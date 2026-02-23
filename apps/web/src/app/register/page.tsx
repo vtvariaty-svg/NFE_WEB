@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "lucide-react";
-import Link from "next/link";
+
 
 export default function RegisterPage() {
     const [name, setName] = useState("");
@@ -124,9 +124,9 @@ export default function RegisterPage() {
                 <div className="mt-6 text-center">
                     <p className="text-sm text-slate-600">
                         Já tem uma conta?{" "}
-                        <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
+                        <a href="/login" className="font-medium text-blue-600 hover:text-blue-500">
                             Fazer login
-                        </Link>
+                        </a>
                     </p>
                 </div>
             </div>

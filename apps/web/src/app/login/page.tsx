@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Building2, Command } from "lucide-react";
-import Link from "next/link";
+
 
 export default function LoginPage() {
     const [email, setEmail] = useState("");
@@ -99,9 +99,9 @@ export default function LoginPage() {
                 <div className="mt-6 text-center">
                     <p className="text-sm text-slate-600">
                         Ainda não tem uma conta?{" "}
-                        <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
+                        <a href="/register" className="font-medium text-blue-600 hover:text-blue-500">
                             Crie sua conta agora
-                        </Link>
+                        </a>
                     </p>
                 </div>
             </div>
