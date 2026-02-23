@@ -54,6 +54,19 @@ export function Sidebar() {
                             </LinkNext>
                         );
                     })}
+
+                    {user?.isGlobalAdmin && (
+                        <LinkNext
+                            href="/dashboard/admin"
+                            className={`${pathname.startsWith("/dashboard/admin")
+                                ? "bg-red-50 text-red-700"
+                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                } group flex items-center rounded-md px-2 py-2.5 text-sm font-medium transition-colors mt-4`}
+                        >
+                            <Users className="mr-3 h-5 w-5 flex-shrink-0 text-slate-400 group-hover:text-slate-500" aria-hidden="true" />
+                            Painel Administrativo
+                        </LinkNext>
+                    )}
                 </nav>
             </div>
             <div className="flex flex-shrink-0 border-t border-slate-200 p-4">

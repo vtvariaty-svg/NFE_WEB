@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -23,6 +23,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
     if (!isAuthenticated) {
         return null; // Will be redirected by AuthContext
+    }
+
+    const hasActiveSubscription = user?.subscriptionStatus === 'ACTIVE';
+    // Allow Global Admins to bypass the subscription lock to manage the system
+    if (!hasActiveSubscription && !user?.isGlobalAdmin) {
+        // Use window.location to strictly transition out of dashboard context
+        window.location.href = '/onboarding/plans';
+        return null;
     }
 
     return (

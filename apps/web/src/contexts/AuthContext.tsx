@@ -8,6 +8,8 @@ interface User {
     name: string;
     email: string;
     tenantId: string;
+    isGlobalAdmin?: boolean;
+    subscriptionStatus?: string | null;
 }
 
 interface AuthContextType {

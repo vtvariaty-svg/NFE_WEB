@@ -51,7 +51,14 @@ export async function authRoutes(app: FastifyInstance) {
     }, async (request, reply) => {
         const { email, password } = request.body as any;
 
-        const user = await prisma.user.findUnique({ where: { email }, include: { tenant: true } });
+        const user = await prisma.user.findUnique({
+            where: { email },
+            include: {
+                tenant: {
+                    include: { subscription: true }
+                }
+            }
+        });
 
         if (!user || user.password !== password) {
             return reply.status(401).send({ message: 'Invalid credentials' });
@@ -63,7 +70,17 @@ export async function authRoutes(app: FastifyInstance) {
             tenantId: user.tenantId
         });
 
-        return { token, user: { id: user.id, name: user.name, email: user.email, tenantId: user.tenantId } };
+        return {
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                tenantId: user.tenantId,
+                isGlobalAdmin: user.isGlobalAdmin,
+                subscriptionStatus: user.tenant.subscription?.status || null
+            }
+        };
     });
 
     app.get('/me', {
