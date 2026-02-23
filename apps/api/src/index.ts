@@ -16,6 +16,7 @@ import { billingRoutes } from './modules/billing/billing.routes.js';
 import { integrationRoutes } from './modules/integrations/integrations.routes.js';
 import { certificateRoutes } from './modules/certificate/certificate.routes.js';
 import { archiveRoutes } from './modules/fiscal/archive.routes.js';
+import { nfeRoutes } from './modules/fiscal/nfe/nfe.routes.js';
 import { auditRoutes } from './modules/fiscal/audit.routes.js';
 import { checkoutRoutes } from './modules/billing/checkout.routes.js';
 import { adminRoutes } from './modules/admin/admin.routes.js';
@@ -60,6 +61,7 @@ async function buildServer() {
     fastify.register(orderRoutes, { prefix: '/orders' });
     fastify.register(invoiceRoutes, { prefix: '/invoices' });
     fastify.register(archiveRoutes, { prefix: '/archives' });
+    fastify.register(nfeRoutes, { prefix: '/fiscal/nfe' });
     fastify.register(auditRoutes, { prefix: '/audits' });
     fastify.register(billingRoutes, { prefix: '/billing' });
     fastify.register(checkoutRoutes, { prefix: '/checkout' });

@@ -1,0 +1,113 @@
+{
+    "info": {
+        "name": "FiscalSaaS NF-e 4.00 Module",
+        "description": "Postman/Insomnia Collection for the Direct SEFAZ integration endpoints.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "1. Upload A1 Certificate",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{jwt_token}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/fiscal/nfe/{{company_id}}/certificates/a1",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "fiscal",
+                        "nfe",
+                        "{{company_id}}",
+                        "certificates",
+                        "a1"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"pfxBase64\": \"MII...\",\n  \"password\": \"1234\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "2. Emit NF-e",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{jwt_token}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/fiscal/nfe/emit",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "fiscal",
+                        "nfe",
+                        "emit"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"companyId\": \"{{company_id}}\",\n  \"payload\": {\n    \"natOp\": \"Venda de mercadoria\",\n    \"tpNF\": \"1\",\n    \"idDest\": \"1\",\n    \"tpImp\": \"1\",\n    \"indFinal\": \"1\",\n    \"indPres\": \"1\",\n    \"dest\": {\n      \"document\": \"12345678909\",\n      \"xNome\": \"Consumidor Teste\",\n      \"indIEDest\": \"9\",\n      \"enderDest\": {\n        \"xLgr\": \"Rua XYZ\",\n        \"nro\": \"10\",\n        \"xBairro\": \"Centro\",\n        \"cMun\": \"3550308\",\n        \"xMun\": \"Sao Paulo\",\n        \"UF\": \"SP\",\n        \"CEP\": \"01000000\"\n      }\n    },\n    \"items\": [\n      {\n        \"cProd\": \"001\",\n        \"xProd\": \"Produto Teste\",\n        \"NCM\": \"62044300\",\n        \"CFOP\": \"5102\",\n        \"uCom\": \"UN\",\n        \"qCom\": 1,\n        \"vUnCom\": 100.00,\n        \"vProd\": 100.00,\n        \"imposto\": {\n          \"icms\": { \"orig\": \"0\", \"CSOSN\": \"102\" }\n        }\n      }\n    ],\n    \"total\": {\n      \"vBC\": 0,\n      \"vICMS\": 0,\n      \"vProd\": 100.00,\n      \"vFrete\": 0,\n      \"vSeg\": 0,\n      \"vDesc\": 0,\n      \"vNF\": 100.00\n    },\n    \"transp\": { \"modFrete\": \"9\" },\n    \"pag\": [\n      { \"tPag\": \"01\", \"vPag\": 100.00 }\n    ]\n  }\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "3. Consultar Protocolo",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{jwt_token}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/fiscal/nfe/{{invoice_id}}/protocol",
+                    "host": [
+                        "{{base_url}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "4. Imprimir DANFE",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{jwt_token}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/fiscal/nfe/{{invoice_id}}/danfe",
+                    "host": [
+                        "{{base_url}}"
+                    ]
+                }
+            }
+        }
+    ]
+}

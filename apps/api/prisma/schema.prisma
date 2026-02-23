@@ -20,6 +20,9 @@ model Tenant {
   products      Product[]
   orders        Order[]
   invoices      Invoice[]
+  certificates  Certificate[]
+  nfeEvents     NfeEvent[]
+  sefazLogs     SefazLog[]
   integrations  IntegrationAccount[]
   subscription  Subscription?
   usage         UsageCounter[]
@@ -28,12 +31,12 @@ model Tenant {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  name          String
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
   roleId        String?
   role          Role?    @relation(fields: [roleId], references: [id])
   isGlobalAdmin Boolean  @default(false)
@@ -69,22 +72,40 @@ model Company {
   zipCode    String? // CEP
   ibgeCode   String? // Código IBGE do município
   phone      String?
+  cPais      String  @default("1058") // Brasil
+  xPais      String  @default("Brasil")
+
+  tpAmbDefault String @default("2") // 1-Produção, 2-Homologação
 
   tenantId    String
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
   certificate Certificate?
+  nfeInvoices Invoice[]
+  nfeEvents   NfeEvent[]
+  sefazLogs   SefazLog[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
 
 model Certificate {
-  id        String    @id @default(uuid())
-  companyId String    @unique
-  company   Company   @relation(fields: [companyId], references: [id])
-  pfxBase64 String
-  password  String
-  expiresAt DateTime?
-  createdAt DateTime  @default(now())
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  companyId String  @unique
+  company   Company @relation(fields: [companyId], references: [id])
+
+  certType     String    @default("A1")
+  pfxEncrypted String // AES Encrypted PFX
+  pfxIv        String // AES IV
+  pfxSalt      String // AES Salt
+  thumbprint   String?
+  validFrom    DateTime?
+  validTo      DateTime?
+  isActive     Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Customer {
@@ -161,13 +182,40 @@ model OrderItem {
 }
 
 model Invoice {
-  id           String        @id @default(uuid())
-  type         String // NFE or NFSE
-  status       String        @default("DRAFT")
-  orderId      String?
-  order        Order?        @relation(fields: [orderId], references: [id])
-  tenantId     String
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  id     String @id @default(uuid())
+  type   String // NFE or NFSE
+  status String @default("DRAFT")
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  orderId  String?
+  order    Order?  @relation(fields: [orderId], references: [id])
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id])
+
+  // NF-e 4.00 specifics
+  serie   String?
+  nnf     Int?
+  cuf     String?
+  cnf     String?
+  chave44 String? @unique
+  cdv     String?
+  tpEmis  String? @default("1") // 1-Normal
+  tpAmb   String? @default("2") // 1-Produção, 2-Homologação
+  finNfe  String? @default("1") // 1-Normal
+
+  xmlUnsigned   String? @db.Text
+  xmlSigned     String? @db.Text
+  xmlAuthorized String? @db.Text
+  protNprot     String?
+  protDhrecbto  String?
+  rejectionCode String?
+  rejectionMsg  String? @db.Text
+
+  items  NfeItem[]
+  events NfeEvent[]
+
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   legalArchive LegalArchive?
@@ -193,11 +241,11 @@ model Plan {
 }
 
 model Subscription {
-  id                 String   @id @default(uuid())
-  tenantId           String   @unique
-  tenant             Tenant   @relation(fields: [tenantId], references: [id])
-  planId             String
-  plan               Plan     @relation(fields: [planId], references: [id])
+  id                   String   @id @default(uuid())
+  tenantId             String   @unique
+  tenant               Tenant   @relation(fields: [tenantId], references: [id])
+  planId               String
+  plan                 Plan     @relation(fields: [planId], references: [id])
   status               String   @default("ACTIVE") // ACTIVE, PAST_DUE, CANCELED
   stripeCustomerId     String?
   stripeSubscriptionId String?  @unique
@@ -238,4 +286,79 @@ model AuditLog {
   resourceId String? // Invoice ID
   metadata   String? // JSON stringified details
   createdAt  DateTime @default(now())
+}
+
+model NfeSequence {
+  tenantId  String
+  companyId String
+  serie     String
+  lastNnf   Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([tenantId, companyId, serie])
+}
+
+model NfeItem {
+  id        String  @id @default(uuid())
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+  nitem     Int
+  cprod     String
+  xprod     String
+  ncm       String
+  cfop      String
+  ucom      String
+  qcom      Float
+  vuncom    Float
+  vprod     Float
+
+  // Tax Info
+  icmsCst   String?
+  pisCst    String?
+  cofinsCst String?
+  icmsBase  Float?
+  icmsRate  Float?
+  icmsValue Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NfeEvent {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+
+  eventType    String // CANCEL, CCE, INUTIL
+  eventSeq     Int     @default(1)
+  eventXmlSent String? @db.Text
+  eventXmlResp String? @db.Text
+
+  status    String  @default("PENDING")
+  sefazCode String?
+  sefazMsg  String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SefazLog {
+  id        String  @id @default(uuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  invoiceId String?
+
+  service     String // STATUS, AUTHORIZE, CANCEL, CCE, etc
+  requestXml  String? @db.Text
+  responseXml String? @db.Text
+  httpStatus  Int?
+  durationMs  Int?
+
+  createdAt DateTime @default(now())
 }
