@@ -1,0 +1,95 @@
+{
+    "info": {
+        "name": "SaaS NFS-e WebServices (Antigravity)",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "1. Configurar Credenciais e Provedor do Município",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{admin_token}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{api_url}}/api/fiscal/nfse/config?companyId={{companyId}}"
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"cmun\": \"3550308\",\n    \"uf\": \"SP\",\n    \"providerId\": \"uuid-provider-abrasf\",\n    \"environment\": \"HOMOLOGATION\",\n    \"authMode\": \"CERT_ONLY\",\n    \"credentials\": { \"loginMunicipal\": \"12345\" }\n}"
+                }
+            }
+        },
+        {
+            "name": "2. Emitir NFS-e (Síncrono Ou Assíncrono)",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{user_token}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{api_url}}/api/fiscal/nfse/emit?companyId={{companyId}}"
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"servico\": {\n        \"descricao\": \"Licenciamento SaaS\",\n        \"cmunIncidencia\": \"3550308\",\n        \"valores\": {\n            \"valorServicos\": 1500.00,\n            \"valorDeducoes\": 0,\n            \"descontoIncondicionado\": 0,\n            \"descontoCondicionado\": 0,\n            \"baseCalculo\": 1500.00,\n            \"aliquota\": 2.0,\n            \"valorIss\": 30.00,\n            \"issRetido\": false,\n            \"valorLiquido\": 1500.00\n        }\n    },\n    \"tomador\": {\n        \"documento\": \"12345678909123\",\n        \"nomeRazao\": \"Cliente Teste Ltda\",\n        \"endereco\": {\n            \"logradouro\": \"Av Paulista\",\n            \"numero\": \"1000\",\n            \"bairro\": \"Bela Vista\",\n            \"cmun\": \"3550308\",\n            \"uf\": \"SP\",\n            \"cep\": \"01310100\"\n        }\n    }\n}"
+                }
+            }
+        },
+        {
+            "name": "3. Consultar NFS-e Emitida por ID Local",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{user_token}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{api_url}}/api/fiscal/nfse/{{invoice_id}}"
+                }
+            }
+        },
+        {
+            "name": "4. Download do XML Final da NFS-e",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{user_token}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{api_url}}/api/fiscal/nfse/{{invoice_id}}/xml"
+                }
+            }
+        },
+        {
+            "name": "5. Cancelar NFS-e",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{user_token}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{api_url}}/api/fiscal/nfse/{{invoice_id}}/cancel"
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"codigoCancelamento\": \"2\",\n    \"justificativa\": \"Cancelamento por erro de emissão.\"\n}"
+                }
+            }
+        }
+    ]
+}
