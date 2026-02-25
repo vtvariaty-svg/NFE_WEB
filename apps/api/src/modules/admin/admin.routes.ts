@@ -62,4 +62,75 @@ export async function adminRoutes(app: FastifyInstance) {
         });
         return reply.status(200).send({ data: errors });
     });
+
+    // ── NFS-e Provider Management ────────────────────────────────────────────
+
+    /**
+     * POST /api/admin/nfse/seed-providers
+     * Seeds the standard NFS-e providers (ABRASF, Nacional, Custom) into the database.
+     * Safe to run multiple times — uses upsert so it won't create duplicates.
+     */
+    app.post('/nfse/seed-providers', async (request: FastifyRequest, reply: FastifyReply) => {
+        const standardProviders = [
+            { name: 'ABRASF v2.02 (Prefeituras parceiras)', type: 'ABRASF' },
+            { name: 'Padrão Nacional NFS-e (SEFIN)', type: 'NATIONAL' },
+            { name: 'Proprietário / Outros (WebISS, Ginfes, Betha)', type: 'OTHER' },
+        ];
+
+        const results = [];
+
+        for (const provider of standardProviders) {
+            // Check if it already exists
+            const existing = await prisma.nfseProvider.findFirst({
+                where: { type: provider.type }
+            });
+
+            if (existing) {
+                results.push({ status: 'already_exists', id: existing.id, ...provider });
+            } else {
+                const created = await prisma.nfseProvider.create({ data: provider });
+                results.push({ status: 'created', id: created.id, ...provider });
+            }
+        }
+
+        return reply.status(200).send({
+            message: 'NFS-e providers seeded successfully. Use the IDs below when configuring municipalities.',
+            providers: results
+        });
+    });
+
+    /**
+     * GET /api/admin/nfse/providers
+     * Lists all registered NFS-e providers.
+     */
+    app.get('/nfse/providers', async (request: FastifyRequest, reply: FastifyReply) => {
+        const providers = await prisma.nfseProvider.findMany({
+            orderBy: { createdAt: 'asc' },
+            include: { _count: { select: { configs: true, invoices: true } } }
+        });
+        return reply.status(200).send({ providers });
+    });
+
+    /**
+     * DELETE /api/admin/nfse/providers/:id
+     * Deletes a provider (only if it has no linked configs or invoices).
+     */
+    app.delete('/nfse/providers/:id', {
+        schema: { params: z.object({ id: z.string().uuid() }) }
+    }, async (request: FastifyRequest, reply: FastifyReply) => {
+        const { id } = request.params as { id: string };
+
+        const configs = await prisma.nfseMunicipalConfig.count({ where: { providerId: id } });
+        const invoices = await prisma.nfseInvoice.count({ where: { providerId: id } });
+
+        if (configs > 0 || invoices > 0) {
+            return reply.status(400).send({
+                error: `Não é possível deletar: existem ${configs} configuração(ões) e ${invoices} nota(s) vinculadas a este provedor.`
+            });
+        }
+
+        await prisma.nfseProvider.delete({ where: { id } });
+        return reply.status(200).send({ message: 'Provedor deletado com sucesso.' });
+    });
 }
+
