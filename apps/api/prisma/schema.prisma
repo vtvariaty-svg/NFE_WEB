@@ -23,6 +23,10 @@ model Tenant {
   certificates  Certificate[]
   nfeEvents     NfeEvent[]
   sefazLogs     SefazLog[]
+  nfseConfigs   NfseMunicipalConfig[]
+  nfseInvoices  NfseInvoice[]
+  nfseEvents    NfseEvent[]
+  nfseLogs      NfseProviderLog[]
   integrations  IntegrationAccount[]
   subscription  Subscription?
   usage         UsageCounter[]
@@ -79,12 +83,16 @@ model Company {
 
   tenantId    String
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
-  certificate Certificate?
-  nfeInvoices Invoice[]
-  nfeEvents   NfeEvent[]
-  sefazLogs   SefazLog[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  certificate  Certificate?
+  nfeInvoices  Invoice[]
+  nfeEvents    NfeEvent[]
+  sefazLogs    SefazLog[]
+  nfseConfigs  NfseMunicipalConfig[]
+  nfseInvoices NfseInvoice[]
+  nfseEvents   NfseEvent[]
+  nfseLogs     NfseProviderLog[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 }
 
 model Certificate {
@@ -359,6 +367,173 @@ model SefazLog {
   responseXml String? @db.Text
   httpStatus  Int?
   durationMs  Int?
+
+  createdAt DateTime @default(now())
+}
+
+// ==========================================
+// NFS-e MODULE
+// ==========================================
+
+model NfseProvider {
+  id        String   @id @default(uuid())
+  name      String
+  type      String   // NATIONAL, ABRASF, OTHER
+  configs   NfseMunicipalConfig[]
+  invoices  NfseInvoice[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NfseMunicipalConfig {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  
+  cmun      String   // Código IBGE Município
+  uf        String
+  
+  providerId String
+  provider   NfseProvider @relation(fields: [providerId], references: [id])
+  
+  environment  String // HOMOLOGATION, PRODUCTION
+  endpointBase String?
+  wsdlUrl      String?
+  
+  authMode     String // CERT_ONLY, TOKEN, LOGIN_MUNICIPAL
+  credsEncrypted String? @db.Text // Encrypted credentials (user/password/token)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, companyId, cmun])
+}
+
+model NfseRpsSequence {
+  tenantId  String
+  companyId String
+  serieRps  String
+  lastRps   Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([tenantId, companyId, serieRps])
+}
+
+model NfseInvoice {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  
+  providerId String
+  provider   NfseProvider @relation(fields: [providerId], references: [id])
+  cmun       String
+
+  serieRps  String
+  numeroRps Int
+  tipoRps   String
+
+  loteId            String?
+  protocolo         String?
+  numeroNfse        String?
+  codigoVerificacao String?
+
+  status String @default("DRAFT") // DRAFT, SIGNED, SENT, PROCESSING, ISSUED, REJECTED, CANCELED, SUBSTITUTED
+
+  payloadUnsigned String? @db.Text
+  payloadSigned   String? @db.Text
+  payloadSent     String? @db.Text
+  payloadResponse String? @db.Text
+  xmlNfse         String? @db.Text
+  pdfUrl          String?
+
+  rejectionCode String?
+  rejectionMsg  String? @db.Text
+
+  items  NfseItem[]
+  taxes  NfseTax[]
+  events NfseEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NfseItem {
+  id        String   @id @default(uuid())
+  invoiceId String
+  invoice   NfseInvoice @relation(fields: [invoiceId], references: [id])
+
+  codigoServicoMunicipal String?
+  itemListaServico       String? // LC 116/2003
+  cnae                   String?
+  
+  descricao     String
+  quantidade    Float
+  valorUnitario Float
+  valorTotal    Float
+
+  aliquotaIss   Float?
+  valorIss      Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NfseTax {
+  id        String   @id @default(uuid())
+  invoiceId String
+  invoice   NfseInvoice @relation(fields: [invoiceId], references: [id])
+
+  issRetido             Boolean @default(false)
+  baseCalculo           Float
+  aliquota              Float
+  valor                 Float
+  deducoes              Float?
+  descontoIncondicionado Float?
+  descontoCondicionado   Float?
+  valorLiquido          Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NfseEvent {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  invoiceId String?
+  invoice   NfseInvoice? @relation(fields: [invoiceId], references: [id])
+
+  eventType       String // CANCEL, SUBSTITUTE, OTHER
+  eventPayloadSent String? @db.Text
+  eventPayloadResp String? @db.Text
+
+  status       String @default("PENDING")
+  providerCode String?
+  providerMsg  String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NfseProviderLog {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  invoiceId String?
+
+  operation      String // issue, cancel, query, status, batch, rps
+  requestPayload String? @db.Text
+  responsePayload String? @db.Text
+  httpStatus     Int?
+  durationMs     Int?
 
   createdAt DateTime @default(now())
 }
