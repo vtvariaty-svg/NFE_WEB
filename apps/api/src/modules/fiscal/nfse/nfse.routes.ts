@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../../../index.js';
 import { NfseEmissionService } from './services/emission.service.js';
 import { nfseIssueSchema } from './validation/nfse.schema.js';
+import { NfseMunicipalConfigService } from './services/municipal-config.service.js';
 
 export async function nfseRoutes(app: FastifyInstance) {
     app.addHook('onRequest', app.authenticate);
@@ -11,6 +12,98 @@ export async function nfseRoutes(app: FastifyInstance) {
         const { tenantId } = request.user as { tenantId: string };
         (request as any).tenantId = tenantId;
     });
+
+    // ── Configuration (per company / per municipality) ────────────────────────
+
+    /**
+     * POST /api/fiscal/nfse/config?companyId=
+     * Creates/updates the NFS-e provider config for a specific municipality.
+     * The user fills in: city IBGE code, provider, endpoints, auth mode, optional credentials.
+     */
+    app.post('/config', {
+        schema: {
+            tags: ['NFS-e Config'],
+            querystring: z.object({ companyId: z.string().uuid() }),
+            body: z.object({
+                cmun: z.string().length(7),
+                uf: z.string().length(2),
+                providerId: z.string().uuid(),
+                environment: z.enum(['HOMOLOGATION', 'PRODUCTION']),
+                endpointBase: z.string().url().optional(),
+                wsdlUrl: z.string().url().optional(),
+                authMode: z.enum(['CERT_ONLY', 'TOKEN', 'LOGIN_MUNICIPAL']),
+                credentials: z.record(z.string()).optional()
+            })
+        }
+    }, async (request, reply) => {
+        const tenantId = (request as any).tenantId;
+        const { companyId } = request.query as { companyId: string };
+
+        // Safety check: company belongs to this tenant
+        const company = await prisma.company.findFirst({ where: { id: companyId, tenantId } });
+        if (!company) return reply.status(404).send({ error: 'Empresa não encontrada.' });
+
+        try {
+            const config = await NfseMunicipalConfigService.upsertConfig(tenantId, companyId, request.body as any);
+            return reply.status(200).send({ message: 'Configuração salva com sucesso.', config });
+        } catch (err: any) {
+            return reply.status(400).send({ error: err.message });
+        }
+    });
+
+    /**
+     * GET /api/fiscal/nfse/config?companyId=
+     * Returns all municipality configurations for the given company.
+     */
+    app.get('/config', {
+        schema: {
+            tags: ['NFS-e Config'],
+            querystring: z.object({ companyId: z.string().uuid() })
+        }
+    }, async (request, reply) => {
+        const tenantId = (request as any).tenantId;
+        const { companyId } = request.query as { companyId: string };
+
+        const company = await prisma.company.findFirst({ where: { id: companyId, tenantId } });
+        if (!company) return reply.status(404).send({ error: 'Empresa não encontrada.' });
+
+        const configs = await prisma.nfseMunicipalConfig.findMany({
+            where: { tenantId, companyId },
+            include: { provider: { select: { id: true, name: true, type: true } } },
+            orderBy: { cmun: 'asc' }
+        });
+
+        return reply.status(200).send({ configs });
+    });
+
+    /**
+     * DELETE /api/fiscal/nfse/config/:cmun?companyId=
+     * Removes the municipal configuration (only if no pending invoices).
+     */
+    app.delete('/config/:cmun', {
+        schema: {
+            tags: ['NFS-e Config'],
+            params: z.object({ cmun: z.string().length(7) }),
+            querystring: z.object({ companyId: z.string().uuid() })
+        }
+    }, async (request, reply) => {
+        const tenantId = (request as any).tenantId;
+        const { cmun } = request.params as { cmun: string };
+        const { companyId } = request.query as { companyId: string };
+
+        const pending = await prisma.nfseInvoice.count({
+            where: { tenantId, companyId, cmun, status: { in: ['DRAFT', 'SENT', 'PROCESSING'] } }
+        });
+
+        if (pending > 0) {
+            return reply.status(400).send({ error: `Existem ${pending} nota(s) em processamento para este município. Aguarde a finalização antes de remover.` });
+        }
+
+        await prisma.nfseMunicipalConfig.deleteMany({ where: { tenantId, companyId, cmun } });
+        return reply.status(200).send({ message: 'Configuração removida.' });
+    });
+
+
 
     // 1. Emissão de NFS-e (Orquestrada)
     app.post(
