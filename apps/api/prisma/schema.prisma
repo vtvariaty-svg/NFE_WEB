@@ -81,6 +81,12 @@ model Company {
 
   tpAmbDefault String @default("2") // 1-Produção, 2-Homologação
 
+  // Contingência SVC-AN / SVC-RS
+  contingenciaAtiva    Boolean  @default(false)
+  tpEmisContingencia   String?  // 6=SVC-RS, 7=SVC-AN
+  motivoContingencia   String?
+  dhContingencia       String?
+
   tenantId    String
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
   certificate  Certificate?
