@@ -1,5 +1,5 @@
 import { NfseMunicipalConfigService } from '../services/municipal-config.service.js';
-import { INfseAdapter } from './base.adapter.js';
+import { INfseAdapter } from '../adapters/base.adapter.js';
 
 import { AbrasfAdapter } from '../adapters/abrasf.adapter.js';
 import { NacionalAdapter } from '../adapters/nacional.adapter.js';

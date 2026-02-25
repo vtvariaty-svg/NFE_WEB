@@ -54,6 +54,6 @@ describe('NFS-e Core Utilities', () => {
         payload.servico.valores.valorIss = 49;
         const failedResult = nfseIssueSchema.safeParse(payload);
         assert.ok(!failedResult.success);
-        assert.ok(failedResult.error.errors[0].message.includes('difere de'));
+        assert.ok(failedResult.error.issues[0].message.includes('difere de'));
     });
 });

@@ -32,7 +32,7 @@ export async function nfseRoutes(app: FastifyInstance) {
                 endpointBase: z.string().url().optional(),
                 wsdlUrl: z.string().url().optional(),
                 authMode: z.enum(['CERT_ONLY', 'TOKEN', 'LOGIN_MUNICIPAL']),
-                credentials: z.record(z.string()).optional()
+                credentials: z.record(z.string(), z.string()).optional()
             })
         }
     }, async (request, reply) => {
