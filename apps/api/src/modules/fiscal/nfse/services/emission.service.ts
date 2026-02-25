@@ -62,7 +62,7 @@ export class NfseEmissionService {
 
         // 7. Hand over to Adapter for Building, Signing and Transmission
         try {
-            const response = await adapter.issueNfse(validatedPayload, { serie: rpsSerie, numero: rpsNumero });
+            const response = await adapter.issueNfse({ ...validatedPayload, tenantId, companyId }, { serie: rpsSerie, numero: rpsNumero });
 
             // 8. Update DB with result
             await prisma.nfseInvoice.update({
