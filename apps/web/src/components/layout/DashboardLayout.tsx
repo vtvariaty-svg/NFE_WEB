@@ -1,10 +1,14 @@
+"use client";
+
 import { Sidebar } from "./Sidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { Loader2, Menu } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, user } = useAuth();
+    const pathname = usePathname();
     const [mounted, setMounted] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -15,7 +19,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     // Close sidebar on route change (mobile)
     useEffect(() => {
         setIsSidebarOpen(false);
-    }, [window.location.pathname]);
+    }, [pathname]);
 
     if (!mounted) {
         return (
