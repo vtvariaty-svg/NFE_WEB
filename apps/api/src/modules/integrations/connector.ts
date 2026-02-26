@@ -185,21 +185,15 @@ export async function convertMarketplaceOrderToInternal(
     companyId: string,
     customerId?: string
 ) {
-    // 1. Create an internal Order
+    // Create internal Order (items stay in MarketplaceOrder.rawPayload
+    // since OrderItem requires productId FK - marketplace products
+    // need to be mapped by the user first)
     const order = await prisma.order.create({
         data: {
             tenantId,
             customerId: customerId || null,
             status: 'PENDING',
-            total: marketplaceOrder.totalAmount,
-            items: {
-                create: marketplaceOrder.items.map(item => ({
-                    description: item.name,
-                    quantity: item.quantity,
-                    unitPrice: item.price,
-                    total: item.quantity * item.price
-                }))
-            }
+            total: marketplaceOrder.totalAmount
         }
     });
 
