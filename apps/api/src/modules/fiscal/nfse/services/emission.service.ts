@@ -12,7 +12,7 @@ export class NfseEmissionService {
 
         const company = await prisma.company.findFirst({
             where: { id: companyId, tenantId },
-            include: { certificate: true }
+            include: { certificates: true }
         });
         if (!company) throw new Error('Empresa(Prestador) não encontrada no Tenant.');
 
