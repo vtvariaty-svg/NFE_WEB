@@ -605,3 +605,50 @@ model NfseProviderLog {
 
   createdAt DateTime @default(now())
 }
+
+// ─── Marketplace Integrations ────────────────────────────────────────────────
+
+model IntegrationAccount {
+  id         String   @id @default(uuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  provider   String   // TIKTOK_SHOP, SHOPEE, MERCADOLIVRE
+  shopId     String?  // External shop/store ID
+  token      String   // Access token (encrypted at app level)
+  refreshTk  String?  // Refresh token for OAuth flows
+  expiresAt  DateTime?
+  isActive   Boolean  @default(true)
+  lastSyncAt DateTime?
+  metadata   String?  @db.Text // JSON with extra config
+
+  orders     MarketplaceOrder[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([tenantId, provider, shopId])
+}
+
+model MarketplaceOrder {
+  id                   String   @id @default(uuid())
+  tenantId             String
+  integrationAccountId String
+  account              IntegrationAccount @relation(fields: [integrationAccountId], references: [id])
+
+  externalOrderId String   // Marketplace order ID
+  platform        String   // TIKTOK_SHOP, SHOPEE
+  status          String   @default("SYNCED") // SYNCED, CONVERTED, FAILED
+  rawPayload      String?  @db.Text // Full JSON from marketplace
+
+  // Link to internal system
+  orderId         String?  // Internal Order ID after conversion
+  invoiceId       String?  // Invoice ID if auto-issued
+
+  buyerName       String?
+  totalAmount     Float?
+  itemCount       Int?
+
+  convertedAt     DateTime?
+  createdAt       DateTime @default(now())
+
+  @@unique([integrationAccountId, externalOrderId])
+}
