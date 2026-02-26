@@ -1,5 +1,6 @@
 import Fastify, { FastifyReply, FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
 import fastifyJwt from '@fastify/jwt';
@@ -27,7 +28,7 @@ dotenv.config();
 export const prisma = new PrismaClient();
 const fastify = Fastify({ logger: true });
 
-// Add Zod Compiler
+// ── Zod schema validation ────────────────────────────────────────────────────
 fastify.setValidatorCompiler(validatorCompiler);
 fastify.setSerializerCompiler(serializerCompiler);
 
@@ -38,8 +39,28 @@ declare module 'fastify' {
 }
 
 async function buildServer() {
+    // ── CORS ──────────────────────────────────────────────────────────────────
     await fastify.register(cors, { origin: '*' });
 
+    // ── Per-tenant rate limiting ───────────────────────────────────────────────
+    // 300 requests / 1 minute per tenant (or IP for unauthenticated requests)
+    await fastify.register(rateLimit, {
+        global: true,
+        max: 300,
+        timeWindow: '1 minute',
+        // Identify requests by tenantId from JWT if available, else by IP
+        keyGenerator: (request: FastifyRequest) => {
+            const jwtUser = (request as any).user as { tenantId?: string } | undefined;
+            return jwtUser?.tenantId || request.ip;
+        },
+        errorResponseBuilder: (_request, context) => ({
+            error: 'Too Many Requests',
+            message: `Rate limit atingido. Tente novamente em ${context.ttl}ms.`,
+            statusCode: 429
+        })
+    });
+
+    // ── JWT Authentication ─────────────────────────────────────────────────────
     await fastify.register(fastifyJwt, { secret: process.env.JWT_SECRET || 'supersecret' });
 
     fastify.decorate('authenticate', async function (request: FastifyRequest, reply: FastifyReply) {
@@ -50,9 +71,19 @@ async function buildServer() {
         }
     });
 
+    // ── Per-tenant structured request logging ──────────────────────────────────
+    // Every request gets logged with tenantId for isolation and audit purposes
+    fastify.addHook('onRequest', async (request) => {
+        const jwtUser = (request as any).user as { tenantId?: string } | undefined;
+        const tenantId = jwtUser?.tenantId || (request.headers['x-tenant-id'] as string) || 'anonymous';
+        // The Fastify logger is pino — bind tenantId to every log line for this request
+        (request as any).log = request.log.child({ tenantId, path: request.url, method: request.method });
+    });
+
+    // ── Health check ──────────────────────────────────────────────────────────
     fastify.get('/health', async () => ({ status: 'ok', time: new Date().toISOString() }));
 
-    // Register Modules
+    // ── Register Modules ───────────────────────────────────────────────────────
     fastify.register(authRoutes, { prefix: '/auth' });
     fastify.register(tenantRoutes, { prefix: '/tenants' });
     fastify.register(companyRoutes, { prefix: '/companies' });

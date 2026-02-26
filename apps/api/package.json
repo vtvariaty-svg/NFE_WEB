@@ -14,6 +14,7 @@
     "dependencies": {
         "@fastify/cors": "latest",
         "@fastify/jwt": "latest",
+        "@fastify/rate-limit": "latest",
         "@prisma/client": "^5.22.0",
         "@xmldom/xmldom": "^0.8.11",
         "dotenv": "latest",
