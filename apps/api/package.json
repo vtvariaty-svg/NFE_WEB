@@ -12,6 +12,7 @@
         "db:generate": "prisma generate"
     },
     "dependencies": {
+        "bcrypt": "^5.1.1",
         "@fastify/cors": "latest",
         "@fastify/jwt": "latest",
         "@fastify/rate-limit": "latest",
