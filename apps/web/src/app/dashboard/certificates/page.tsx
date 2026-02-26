@@ -80,7 +80,7 @@ export default function CertificatesPage() {
 
         try {
             const buffer = await pfxFile.arrayBuffer();
-            const pfxBase64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+            const pfxBase64 = btoa(Array.from(new Uint8Array(buffer), b => String.fromCharCode(b)).join(''));
 
             await api.post(`/certificates/${selectedCompany}/renew`, {
                 pfxBase64, password, label: label || undefined
