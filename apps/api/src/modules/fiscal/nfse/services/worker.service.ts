@@ -54,5 +54,10 @@ export class NfsePollWorkerService {
     }
 }
 
-// In a real environment, you'd mount this to a cron-scheduler or a persistent running loop
-// setInterval(() => NfsePollWorkerService.processPendingBatches(), 60000); // 1 minute
+// Auto-start polling every 60 seconds on server boot
+setInterval(() => {
+    NfsePollWorkerService.processPendingBatches().catch(console.error);
+}, 60_000);
+
+console.log('[NFS-e Worker] Auto-status polling started (60s interval)');
+

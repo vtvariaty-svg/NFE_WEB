@@ -463,6 +463,10 @@ model NfseInvoice {
   taxes  NfseTax[]
   events NfseEvent[]
 
+  substituteOfId String?
+  substituteOf   NfseInvoice?  @relation("Substitution", fields: [substituteOfId], references: [id])
+  substitutions  NfseInvoice[] @relation("Substitution")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

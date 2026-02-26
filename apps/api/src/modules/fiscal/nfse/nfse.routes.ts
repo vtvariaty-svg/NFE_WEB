@@ -1,9 +1,13 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../../../index.js';
-import { NfseEmissionService } from './services/emission.service.js';
+import { NfseEmissionService, NfseCancelService, NfseSubstitutionService } from './services/emission.service.js';
 import { nfseIssueSchema } from './validation/nfse.schema.js';
 import { NfseMunicipalConfigService } from './services/municipal-config.service.js';
+import { ProviderResolver } from './config/provider.resolver.js';
+import { NfseMunicipalLayoutMap } from './adapters/layout.map.js';
+// Import worker so it auto-starts on server boot
+import './services/worker.service.js';
 
 export async function nfseRoutes(app: FastifyInstance) {
     app.addHook('onRequest', app.authenticate);
@@ -197,8 +201,24 @@ export async function nfseRoutes(app: FastifyInstance) {
             const tenantId = (request as any).tenantId;
             const { id } = request.params as { id: string };
 
-            // TODO: Call Adapter.queryBatch() and update DB
-            return { message: 'Consulta de Lote recebida na fila ou resolvida.', id };
+            const invoice = await prisma.nfseInvoice.findFirst({ where: { id, tenantId } });
+            if (!invoice) return reply.status(404).send({ error: 'NFS-e não encontrada.' });
+            if (!invoice.protocolo) return reply.status(400).send({ error: 'Sem protocolo para consultar.' });
+
+            const adapter = await ProviderResolver.resolve(tenantId, invoice.companyId, invoice.cmun);
+            const result = await adapter.queryBatch(invoice.protocolo);
+
+            if (result.status !== 'PROCESSING') {
+                await prisma.nfseInvoice.update({
+                    where: { id },
+                    data: {
+                        status: result.status, numeroNfse: result.numeroNfse,
+                        codigoVerificacao: result.codigoVerificacao, xmlNfse: result.xmlNfse,
+                        rejectionCode: result.rejectionCode, rejectionMsg: result.rejectionMessage
+                    }
+                });
+            }
+            return reply.status(200).send(result);
         }
     );
 
@@ -218,8 +238,9 @@ export async function nfseRoutes(app: FastifyInstance) {
             const { companyId } = request.query as { companyId: string };
             const { serie, numero } = request.body as any;
 
-            // TODO: Call Adapter.queryByRps() and inject responses downward
-            return { message: `RPS ${serie}-${numero} consultado.` };
+            const adapter = await ProviderResolver.resolve(tenantId, companyId, companyId);
+            const result = await adapter.queryByRps(serie, numero);
+            return reply.status(200).send(result);
         }
     );
 
@@ -239,10 +260,12 @@ export async function nfseRoutes(app: FastifyInstance) {
             const { id } = request.params as { id: string };
             const payload = request.body as any;
 
-            // 1. Register Event in NfseEvent
-            // 2. adapter.cancelNfse()
-            // 3. Update Invoice to CANCELED
-            return { message: 'Processo de Cancelamento enviado ao adapter.' };
+            try {
+                const result = await NfseCancelService.cancel(tenantId, id, payload.codigoCancelamento, payload.justificativa);
+                return reply.status(result.success ? 200 : 400).send(result);
+            } catch (err: any) {
+                return reply.status(400).send({ error: err.message });
+            }
         }
     );
 
@@ -258,8 +281,17 @@ export async function nfseRoutes(app: FastifyInstance) {
             }
         },
         async (request, reply) => {
-            // Emits a new NFS-e flagging the original one as substituted inside the provider payload if supported.
-            return { message: 'Substituição pendente de implementação no provedor alvo.' };
+            const tenantId = (request as any).tenantId;
+            const { id } = request.params as { id: string };
+            const { codigoCancelamento, justificativa, ...newPayload } = request.body as any;
+            try {
+                const result = await NfseSubstitutionService.substitute(
+                    tenantId, id, codigoCancelamento || '2', justificativa || 'Substituição de nota fiscal', newPayload
+                );
+                return reply.status(result.success ? 200 : 400).send(result);
+            } catch (err: any) {
+                return reply.status(400).send({ error: err.message });
+            }
         }
     );
 
@@ -274,8 +306,16 @@ export async function nfseRoutes(app: FastifyInstance) {
             }
         },
         async (request, reply) => {
-            // providerResolver -> adapter.status()
-            return { online: true, provider: 'Simulado' };
+            const tenantId = (request as any).tenantId;
+            const { companyId, cmun } = request.query as { companyId: string; cmun: string };
+            try {
+                const adapter = await ProviderResolver.resolve(tenantId, companyId, cmun);
+                const status = await adapter.status();
+                const layout = NfseMunicipalLayoutMap.get(cmun);
+                return reply.status(200).send({ ...status, cmun, layout: layout.cityName });
+            } catch (err: any) {
+                return reply.status(400).send({ error: err.message });
+            }
         }
     );
 }
