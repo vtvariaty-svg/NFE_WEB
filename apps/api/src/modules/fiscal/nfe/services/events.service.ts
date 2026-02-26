@@ -17,7 +17,7 @@ function nowBrISO() {
   return new Date().toISOString().replace('Z', '-03:00');
 }
 
-function buildEventEnvelope(xmlSignedEvento: string, cUF: string, tpAmb: string, wsdlService: string) {
+function buildEventEnvelope(xmlSignedEvento: string, cUF: string, tpAmb: string, wsdlService: string): string {
   return `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
   <soap12:Header>
@@ -37,10 +37,18 @@ function buildEventEnvelope(xmlSignedEvento: string, cUF: string, tpAmb: string,
 }
 
 async function sendEventToSefaz(
-  xmlEvento: string, idEvento: string, cert: { pfxBuffer: Buffer; password: string },
-  url: string, soapAction: string, tenantId: string, companyId: string, invoiceId: string | undefined,
-  cUF: string, tpAmb: string, wsdlService: string
-) {
+  xmlEvento: string,
+  idEvento: string,
+  cert: { pfxBuffer: Buffer; password: string },
+  url: string,
+  soapAction: string,
+  tenantId: string,
+  companyId: string,   // guaranteed non-null by caller
+  invoiceId: string | undefined,
+  cUF: string,
+  tpAmb: string,
+  wsdlService: string
+): Promise<string> {
   const xmlSigned = NfeSigner.signXml(xmlEvento, idEvento, cert.pfxBuffer, cert.password);
   const envelope = buildEventEnvelope(xmlSigned, cUF, tpAmb, wsdlService);
   return SefazSoapClient.send(url, soapAction, envelope, cert.pfxBuffer, cert.password, tenantId, companyId, invoiceId);
@@ -55,14 +63,21 @@ export class NfeCancelService {
     if (!invoice.protNprot) throw new Error('Protocolo de autorização não encontrado.');
     if (justificativa.length < 15 || justificativa.length > 255) throw new Error('Justificativa deve ter entre 15 e 255 caracteres.');
 
-    const company = await prisma.company.findFirstOrThrow({ where: { id: invoice.companyId, tenantId } });
-    const cert = await CertificateService.getActiveCert(tenantId, invoice.companyId);
+    // Destructure with guaranteed non-null defaults
+    const companyId: string = invoice.companyId ?? '';
+    const chave44: string = invoice.chave44 ?? '';
+    const cUF: string = invoice.cuf ?? '35';
+    const tpAmb: string = invoice.tpAmb ?? '2';
+    const nProt: string = invoice.protNprot;
 
-    const cUF = invoice.cuf ?? '35';
-    const tpAmb = invoice.tpAmb ?? '2';
+    const company = await prisma.company.findFirstOrThrow({ where: { id: companyId, tenantId } });
+    const cnpj: string = company.document?.replace(/\D/g, '') ?? '';
+    const uf: string = company.state ?? 'SP';
+
+    const cert = await CertificateService.getActiveCert(tenantId, companyId);
+
     const nSeqEvento = '01';
-    const idEvento = `ID110111${invoice.chave44}${nSeqEvento}`;
-    const cnpj = company.document?.replace(/\D/g, '') ?? '';
+    const idEvento = `ID110111${chave44}${nSeqEvento}`;
 
     const xmlEvento = `<?xml version="1.0" encoding="utf-8"?>
 <evento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">
@@ -70,29 +85,27 @@ export class NfeCancelService {
     <cOrgao>${cUF}</cOrgao>
     <tpAmb>${tpAmb}</tpAmb>
     <CNPJ>${cnpj}</CNPJ>
-    <chNFe>${invoice.chave44}</chNFe>
+    <chNFe>${chave44}</chNFe>
     <dhEvento>${nowBrISO()}</dhEvento>
     <tpEvento>110111</tpEvento>
     <nSeqEvento>1</nSeqEvento>
     <verEvento>1.00</verEvento>
     <detEvento versao="1.00">
       <descEvento>Cancelamento</descEvento>
-      <nProt>${invoice.protNprot}</nProt>
+      <nProt>${nProt}</nProt>
       <xJust>${justificativa}</xJust>
     </detEvento>
   </infEvento>
 </evento>`;
 
-    const url = SefazEndpointResolver.resolveEndpoint(company.state ?? 'SP', tpAmb, 'NfeRecepcaoEvento4');
-    const responseXml = await sendEventToSefaz(xmlEvento, idEvento, cert, url, 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4', tenantId, invoice.companyId, invoiceId, cUF, tpAmb, 'NFeRecepcaoEvento4');
+    const url = SefazEndpointResolver.resolveEndpoint(uf, tpAmb, 'NfeRecepcaoEvento4');
+    const responseXml = await sendEventToSefaz(xmlEvento, idEvento, cert, url, 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4', tenantId, companyId, invoiceId, cUF, tpAmb, 'NFeRecepcaoEvento4');
 
     const { cStat, xMotivo } = parseSefazCstat(responseXml);
-    const success = ['135', '155'].includes(cStat);
-
-    if (success) {
+    if (['135', '155'].includes(cStat)) {
       await prisma.invoice.update({ where: { id: invoiceId }, data: { status: 'CANCELED' } });
     }
-    return { success, cStat, xMotivo };
+    return { success: ['135', '155'].includes(cStat), cStat, xMotivo };
   }
 }
 
@@ -105,22 +118,28 @@ export class NfeCceService {
     const invoice = await prisma.invoice.findFirstOrThrow({ where: { id: invoiceId, tenantId } });
     if (invoice.status !== 'AUTHORIZED') throw new Error('CC-e apenas para NF-e autorizada.');
 
-    const company = await prisma.company.findFirstOrThrow({ where: { id: invoice.companyId, tenantId } });
-    const cert = await CertificateService.getActiveCert(tenantId, invoice.companyId);
+    const companyId: string = invoice.companyId ?? '';
+    const chave44: string = invoice.chave44 ?? '';
+    const cUF: string = invoice.cuf ?? '35';
+    const tpAmb: string = invoice.tpAmb ?? '2';
 
-    const cUF = invoice.cuf ?? '35';
-    const tpAmb = invoice.tpAmb ?? '2';
+    const company = await prisma.company.findFirstOrThrow({ where: { id: companyId, tenantId } });
+    const cnpj: string = company.document?.replace(/\D/g, '') ?? '';
+    const uf: string = company.state ?? 'SP';
+
+    const cert = await CertificateService.getActiveCert(tenantId, companyId);
+
     const existingCce = await prisma.sefazLog.count({ where: { invoiceId, service: { contains: 'CCe' } } });
     const nSeqEvento = String(existingCce + 1).padStart(2, '0');
-    const idEvento = `ID110110${invoice.chave44}${nSeqEvento}`;
+    const idEvento = `ID110110${chave44}${nSeqEvento}`;
 
     const xmlEvento = `<?xml version="1.0" encoding="utf-8"?>
 <evento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">
   <infEvento Id="${idEvento}">
     <cOrgao>${cUF}</cOrgao>
     <tpAmb>${tpAmb}</tpAmb>
-    <CNPJ>${company.document?.replace(/\D/g, '') ?? ''}</CNPJ>
-    <chNFe>${invoice.chave44}</chNFe>
+    <CNPJ>${cnpj}</CNPJ>
+    <chNFe>${chave44}</chNFe>
     <dhEvento>${nowBrISO()}</dhEvento>
     <tpEvento>110110</tpEvento>
     <nSeqEvento>${parseInt(nSeqEvento)}</nSeqEvento>
@@ -133,8 +152,8 @@ export class NfeCceService {
   </infEvento>
 </evento>`;
 
-    const url = SefazEndpointResolver.resolveEndpoint(company.state ?? 'SP', tpAmb, 'NfeRecepcaoEvento4');
-    const responseXml = await sendEventToSefaz(xmlEvento, idEvento, cert, url, 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4', tenantId, invoice.companyId, invoiceId, cUF, tpAmb, 'NFeRecepcaoEvento4');
+    const url = SefazEndpointResolver.resolveEndpoint(uf, tpAmb, 'NfeRecepcaoEvento4');
+    const responseXml = await sendEventToSefaz(xmlEvento, idEvento, cert, url, 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4', tenantId, companyId, invoiceId, cUF, tpAmb, 'NFeRecepcaoEvento4');
 
     const { cStat, xMotivo } = parseSefazCstat(responseXml);
     return { success: cStat === '135', cStat, xMotivo };
@@ -148,11 +167,13 @@ export class NfeInutilizacaoService {
     ano: number; serie: string; nNFIni: number; nNFFin: number; xJust: string; tpAmb: string;
   }) {
     if (params.xJust.length < 15 || params.xJust.length > 255) throw new Error('Justificativa deve ter entre 15 e 255 caracteres.');
-    const company = await prisma.company.findFirstOrThrow({ where: { id: companyId, tenantId } });
-    const cert = await CertificateService.getActiveCert(tenantId, companyId);
 
-    const cnpj = company.document?.replace(/\D/g, '') ?? '';
-    const cUF = company.ibgeCode?.substring(0, 2) ?? '35';
+    const company = await prisma.company.findFirstOrThrow({ where: { id: companyId, tenantId } });
+    const cnpj: string = company.document?.replace(/\D/g, '') ?? '';
+    const cUF: string = company.ibgeCode?.substring(0, 2) ?? '35';
+    const uf: string = company.state ?? 'SP';
+
+    const cert = await CertificateService.getActiveCert(tenantId, companyId);
     const anoShort = String(params.ano).substring(2);
     const idInut = `ID${cUF}${anoShort}${cnpj}${params.serie.padStart(3, '0')}${String(params.nNFIni).padStart(9, '0')}${String(params.nNFFin).padStart(9, '0')}`;
 
@@ -185,7 +206,7 @@ export class NfeInutilizacaoService {
   </soap12:Body>
 </soap12:Envelope>`;
 
-    const url = SefazEndpointResolver.resolveEndpoint(company.state ?? 'SP', params.tpAmb, 'NfeInutilizacao4');
+    const url = SefazEndpointResolver.resolveEndpoint(uf, params.tpAmb, 'NfeInutilizacao4');
     const responseXml = await SefazSoapClient.send(url, 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeInutilizacao4', envelope, cert.pfxBuffer, cert.password, tenantId, companyId);
 
     const { cStat, xMotivo } = parseSefazCstat(responseXml);
@@ -205,13 +226,16 @@ export class NfeManifestacaoService {
 
   static async manifestar(tenantId: string, invoiceId: string, tpEvento: '210200' | '210210' | '210220' | '210240', xJust?: string) {
     const invoice = await prisma.invoice.findFirstOrThrow({ where: { id: invoiceId, tenantId } });
-    const company = await prisma.company.findFirstOrThrow({ where: { id: invoice.companyId, tenantId } });
-    const cert = await CertificateService.getActiveCert(tenantId, invoice.companyId);
+    const companyId: string = invoice.companyId ?? '';
+    const chave44: string = invoice.chave44 ?? '';
+    const tpAmb: string = invoice.tpAmb ?? '2';
 
+    const company = await prisma.company.findFirstOrThrow({ where: { id: companyId, tenantId } });
+    const cnpj: string = company.document?.replace(/\D/g, '') ?? '';
+
+    const cert = await CertificateService.getActiveCert(tenantId, companyId);
     const descEvento = this.EVENTOS[tpEvento];
-    const tpAmb = invoice.tpAmb ?? '2';
-    const idEvento = `ID${tpEvento}${invoice.chave44}01`;
-    const cnpj = company.document?.replace(/\D/g, '') ?? '';
+    const idEvento = `ID${tpEvento}${chave44}01`;
 
     const xmlEvento = `<?xml version="1.0" encoding="utf-8"?>
 <evento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">
@@ -219,7 +243,7 @@ export class NfeManifestacaoService {
     <cOrgao>91</cOrgao>
     <tpAmb>${tpAmb}</tpAmb>
     <CNPJ>${cnpj}</CNPJ>
-    <chNFe>${invoice.chave44}</chNFe>
+    <chNFe>${chave44}</chNFe>
     <dhEvento>${nowBrISO()}</dhEvento>
     <tpEvento>${tpEvento}</tpEvento>
     <nSeqEvento>1</nSeqEvento>
@@ -231,12 +255,12 @@ export class NfeManifestacaoService {
   </infEvento>
 </evento>`;
 
-    // Manifestação goes to AN (ambiente nacional)
+    // Manifestação goes to AN (Ambiente Nacional)
     const url = tpAmb === '1'
       ? 'https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx'
       : 'https://hom.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx';
 
-    const responseXml = await sendEventToSefaz(xmlEvento, idEvento, cert, url, 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4', tenantId, invoice.companyId, invoiceId, '91', tpAmb, 'NFeRecepcaoEvento4');
+    const responseXml = await sendEventToSefaz(xmlEvento, idEvento, cert, url, 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4', tenantId, companyId, invoiceId, '91', tpAmb, 'NFeRecepcaoEvento4');
 
     const { cStat, xMotivo } = parseSefazCstat(responseXml);
     return { success: cStat === '135', cStat, xMotivo };
@@ -250,14 +274,16 @@ export class NfeStatusService {
     const company = await prisma.company.findFirstOrThrow({ where: { id: companyId, tenantId } });
     const cert = await CertificateService.getActiveCert(tenantId, companyId);
 
-    const resolvedUf = uf ?? company.state ?? 'SP';
-    const resolvedAmb = tpAmb ?? company.tpAmbDefault ?? '2';
-    const cUF = company.ibgeCode?.substring(0, 2) ?? '35';
+    const resolvedUf: string = uf ?? company.state ?? 'SP';
+    const resolvedAmb: string = tpAmb ?? company.tpAmbDefault ?? '2';
+    const cUF: string = company.ibgeCode?.substring(0, 2) ?? '35';
 
     const envelope = `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
   <soap12:Header>
-    <nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NfeStatusServico4"><cUF>${cUF}</cUF><versaoDados>4.00</versaoDados></nfeCabecMsg>
+    <nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NfeStatusServico4">
+      <cUF>${cUF}</cUF><versaoDados>4.00</versaoDados>
+    </nfeCabecMsg>
   </soap12:Header>
   <soap12:Body>
     <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NfeStatusServico4">
@@ -315,7 +341,7 @@ export class NfeDownloadService {
     if (!invoice) throw new Error('NF-e não encontrada.');
     const xml = invoice.xmlAuthorized ?? invoice.xmlSigned;
     if (!xml) throw new Error('XML não disponível para esta NF-e.');
-    return { xml, chave44: invoice.chave44, status: invoice.status };
+    return { xml, chave44: invoice.chave44 ?? '', status: invoice.status };
   }
 }
 
@@ -324,22 +350,27 @@ export class NfeDownloadService {
 export class NfeRetryService {
   static async retryPending(tenantId: string, companyId?: string) {
     const where: any = {
-      tenantId, status: { in: ['SENT', 'ERROR'] },
+      tenantId,
+      status: { in: ['SENT', 'ERROR'] },
       updatedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }
     };
     if (companyId) where.companyId = companyId;
 
     const pending = await prisma.invoice.findMany({ where, take: 20 });
-    const results = [];
+    const results: any[] = [];
 
     for (const inv of pending) {
       try {
-        const company = await prisma.company.findFirst({ where: { id: inv.companyId } });
-        if (!company) continue;
-        const cert = await CertificateService.getActiveCert(tenantId, inv.companyId);
+        const invCompanyId: string = inv.companyId ?? '';
+        const invChave44: string = inv.chave44 ?? '';
+        const cUF: string = inv.cuf ?? '35';
+        const tpAmb: string = inv.tpAmb ?? '2';
 
-        const cUF = inv.cuf ?? '35';
-        const tpAmb = inv.tpAmb ?? '2';
+        const company = await prisma.company.findFirst({ where: { id: invCompanyId } });
+        if (!company) continue;
+        const uf: string = company.state ?? 'SP';
+
+        const cert = await CertificateService.getActiveCert(tenantId, invCompanyId);
 
         const envelope = `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
@@ -349,14 +380,14 @@ export class NfeRetryService {
   <soap12:Body>
     <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4">
       <consSitNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
-        <tpAmb>${tpAmb}</tpAmb><xServ>CONSULTAR</xServ><chNFe>${inv.chave44}</chNFe>
+        <tpAmb>${tpAmb}</tpAmb><xServ>CONSULTAR</xServ><chNFe>${invChave44}</chNFe>
       </consSitNFe>
     </nfeDadosMsg>
   </soap12:Body>
 </soap12:Envelope>`;
 
-        const url = SefazEndpointResolver.resolveEndpoint(company.state ?? 'SP', tpAmb, 'NfeConsultaProtocolo4');
-        const responseXml = await SefazSoapClient.send(url, 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4', envelope, cert.pfxBuffer, cert.password, tenantId, inv.companyId, inv.id);
+        const url = SefazEndpointResolver.resolveEndpoint(uf, tpAmb, 'NfeConsultaProtocolo4');
+        const responseXml = await SefazSoapClient.send(url, 'http://www.portalfiscal.inf.br/nfe/wsdl/NFeConsultaProtocolo4', envelope, cert.pfxBuffer, cert.password, tenantId, invCompanyId, inv.id);
 
         const { cStat } = parseSefazCstat(responseXml);
         const nProt = responseXml.match(/<nProt>(.*?)<\/nProt>/)?.[1];
@@ -364,9 +395,9 @@ export class NfeRetryService {
         if (['100', '101'].includes(cStat) && nProt) {
           const newStatus = cStat === '100' ? 'AUTHORIZED' : 'CANCELED';
           await prisma.invoice.update({ where: { id: inv.id }, data: { status: newStatus, protNprot: nProt } });
-          results.push({ id: inv.id, chave: inv.chave44, newStatus });
+          results.push({ id: inv.id, chave: invChave44, newStatus });
         } else {
-          results.push({ id: inv.id, chave: inv.chave44, cStat });
+          results.push({ id: inv.id, chave: invChave44, cStat });
         }
       } catch (e: any) {
         results.push({ id: inv.id, error: e.message });
