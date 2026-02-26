@@ -22,6 +22,7 @@ import { nfseRoutes } from './modules/fiscal/nfse/nfse.routes.js';
 import { auditRoutes } from './modules/fiscal/audit.routes.js';
 import { checkoutRoutes } from './modules/billing/checkout.routes.js';
 import { adminRoutes } from './modules/admin/admin.routes.js';
+import { fiscalOpsRoutes } from './modules/fiscal/fiscal-ops.routes.js';
 
 dotenv.config();
 
@@ -100,6 +101,7 @@ async function buildServer() {
     fastify.register(checkoutRoutes, { prefix: '/checkout' });
     fastify.register(adminRoutes, { prefix: '/admin' });
     fastify.register(integrationRoutes, { prefix: '/integrations' });
+    fastify.register(fiscalOpsRoutes, { prefix: '/fiscal-ops' });
 
     return fastify;
 }
