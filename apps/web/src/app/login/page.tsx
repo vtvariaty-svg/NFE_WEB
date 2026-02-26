@@ -32,6 +32,10 @@ export default function LoginPage() {
             }
 
             const data = await response.json();
+            // Store refresh token for auto-renewal
+            if (data.refreshToken) {
+                localStorage.setItem('nfe_refresh_token', data.refreshToken);
+            }
             login(data.token, data.user);
         } catch (err: any) {
             setError(err.message || "Erro ao fazer login");

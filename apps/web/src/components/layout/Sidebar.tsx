@@ -5,10 +5,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
     Building2,
     Command,
+    CreditCard,
     Home,
     LogOut,
     Package,
     Receipt,
+    ShieldCheck,
     Users
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -19,6 +21,8 @@ const navigation = [
     { name: "Clientes", href: "/dashboard/customers", icon: Users },
     { name: "Produtos", href: "/dashboard/products", icon: Package },
     { name: "Notas Fiscais", href: "/dashboard/invoices", icon: Receipt },
+    { name: "Certificados", href: "/dashboard/certificates", icon: ShieldCheck },
+    { name: "Billing", href: "/dashboard/billing", icon: CreditCard },
 ];
 
 export function Sidebar() {

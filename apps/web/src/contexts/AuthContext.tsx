@@ -51,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const logout = () => {
         localStorage.removeItem("nfe_token");
         localStorage.removeItem("nfe_user");
+        localStorage.removeItem("nfe_refresh_token");
         setToken(null);
         setUser(null);
         router.push("/login");
