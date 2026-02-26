@@ -7,11 +7,11 @@ export default function Home() {
         <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 text-white">
             {/* Header */}
             <header className="flex items-center justify-between px-6 py-4 md:px-12">
-                <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 flex items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-md">
-                        <span className="text-xs font-bold">1</span>
+                <div className="flex items-center space-x-3">
+                    <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20">
+                        <span className="text-xl font-bold">1</span>
                     </div>
-                    <span className="text-lg font-semibold tracking-tight text-slate-900">OneNFe</span>
+                    <span className="text-xl font-bold tracking-tight text-white">OneNFe</span>
                 </div>
                 <nav className="flex items-center gap-3">
                     <Link

@@ -74,7 +74,7 @@ export default function InvoicesPage() {
                 </Link>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden overflow-x-auto">
                 {loading ? (
                     <div className="p-8 text-center text-slate-500">Carregando...</div>
                 ) : invoices.length === 0 ? (

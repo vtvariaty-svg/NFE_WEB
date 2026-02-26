@@ -11,7 +11,8 @@ import {
     Package,
     Receipt,
     ShieldCheck,
-    Users
+    Users,
+    X // Added X for closing mobile sidebar
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 
@@ -25,19 +26,32 @@ const navigation = [
     { name: "Billing", href: "/dashboard/billing", icon: CreditCard },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+    onClose?: () => void;
+}
+
+export function Sidebar({ onClose }: SidebarProps) {
     const pathname = usePathname();
     const { logout, user } = useAuth();
 
     return (
         <div className="flex h-full w-64 flex-col border-r border-slate-200 bg-white">
-            <div className="flex h-16 shrink-0 items-center px-6">
-                <div className="flex flex-shrink-0 items-center px-4 space-x-3">
+            <div className="flex h-16 shrink-0 items-center justify-between px-6">
+                <div className="flex flex-shrink-0 items-center space-x-3">
                     <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20">
                         <span className="text-xl font-bold">1</span>
                     </div>
                     <span className="text-xl font-bold tracking-tight text-slate-900">OneNFe</span>
                 </div>
+                {/* Mobile close button */}
+                {onClose && (
+                    <button
+                        onClick={onClose}
+                        className="lg:hidden -mr-2 p-2 text-slate-400 hover:text-slate-500"
+                    >
+                        <X className="h-6 w-6" />
+                    </button>
+                )}
             </div>
             <div className="flex flex-1 flex-col overflow-y-auto pt-5 pb-4">
                 <nav className="mt-5 flex-1 space-y-1 px-4">

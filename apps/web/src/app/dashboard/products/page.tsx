@@ -58,7 +58,7 @@ export default function ProductsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-semibold text-slate-900">Produtos / Serviços</h1>
                     <p className="mt-1 text-sm text-slate-500">
@@ -67,13 +67,13 @@ export default function ProductsPage() {
                 </div>
                 <button
                     onClick={() => setIsModalOpen(true)}
-                    className="flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 shadow-sm transition-colors"
+                    className="flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 shadow-sm transition-colors"
                 >
                     <Plus className="mr-2 h-4 w-4" /> Novo Produto
                 </button>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden overflow-x-auto">
                 {loading ? (
                     <div className="p-8 text-center text-slate-500">Carregando...</div>
                 ) : products.length === 0 ? (
