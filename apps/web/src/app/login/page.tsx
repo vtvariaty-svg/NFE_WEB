@@ -48,10 +48,10 @@ export default function LoginPage() {
         <div className="flex min-h-screen items-center justify-center bg-slate-50">
             <div className="w-full max-w-md space-y-8 rounded-2xl bg-white p-10 shadow-xl border border-slate-100">
                 <div className="flex flex-col items-center">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600">
-                        <Command className="h-8 w-8 text-white" />
+                    <div className="h-16 w-16 flex items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-xl shadow-indigo-500/20 mb-6">
+                        <span className="text-3xl font-bold text-white">1</span>
                     </div>
-                    <h2 className="mt-6 text-3xl font-extrabold text-slate-900 tracking-tight">Fiscal SaaS</h2>
+                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">OneNFe</h2>
                     <p className="mt-2 text-sm text-slate-500">
                         Acesse seu painel administrativo
                     </p>

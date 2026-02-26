@@ -51,7 +51,7 @@ export default function RegisterPage() {
                     </div>
                     <h2 className="mt-6 text-3xl font-extrabold text-slate-900 tracking-tight">Criar Conta</h2>
                     <p className="mt-2 text-sm text-slate-500">
-                        Comece a usar o Fiscal SaaS agora
+                        Comece a usar o OneNFe agora
                     </p>
                 </div>
 

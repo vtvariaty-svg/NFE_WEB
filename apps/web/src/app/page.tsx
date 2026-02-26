@@ -8,8 +8,10 @@ export default function Home() {
             {/* Header */}
             <header className="flex items-center justify-between px-6 py-4 md:px-12">
                 <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-lg bg-blue-500 flex items-center justify-center font-bold text-sm">FS</div>
-                    <span className="text-lg font-semibold tracking-tight">Fiscal SaaS</span>
+                    <div className="h-8 w-8 flex items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-md">
+                        <span className="text-xs font-bold">1</span>
+                    </div>
+                    <span className="text-lg font-semibold tracking-tight text-slate-900">OneNFe</span>
                 </div>
                 <nav className="flex items-center gap-3">
                     <Link
@@ -102,7 +104,9 @@ export default function Home() {
 
             {/* Footer */}
             <footer className="text-center py-8 text-slate-500 text-sm border-t border-slate-800">
-                © {new Date().getFullYear()} Fiscal SaaS. Todos os direitos reservados.
+                <p className="mt-8 text-center text-base text-slate-500">
+                    &copy; {new Date().getFullYear()} OneNFe. Todos os direitos reservados.
+                </p>
             </footer>
         </main>
     );

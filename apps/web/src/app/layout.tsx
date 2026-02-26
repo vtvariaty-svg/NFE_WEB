@@ -6,8 +6,8 @@ import { AuthProvider } from '@/contexts/AuthContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-    title: 'Fiscal SaaS | Painel',
-    description: 'Sistema completo de emissão de NF-e/NFS-e',
+    title: 'OneNFe | Painel de Notas Fiscais',
+    description: 'Gestão de notas fiscais moderna e eficiente',
 };
 
 export default function RootLayout({

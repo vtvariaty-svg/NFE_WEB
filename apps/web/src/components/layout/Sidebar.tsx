@@ -32,8 +32,12 @@ export function Sidebar() {
     return (
         <div className="flex h-full w-64 flex-col border-r border-slate-200 bg-white">
             <div className="flex h-16 shrink-0 items-center px-6">
-                <Command className="h-6 w-6 text-blue-600 mr-2" />
-                <span className="text-xl font-bold tracking-tight text-slate-900">Fiscal SaaS</span>
+                <div className="flex flex-shrink-0 items-center px-4 space-x-3">
+                    <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-lg shadow-indigo-500/20">
+                        <span className="text-xl font-bold">1</span>
+                    </div>
+                    <span className="text-xl font-bold tracking-tight text-slate-900">OneNFe</span>
+                </div>
             </div>
             <div className="flex flex-1 flex-col overflow-y-auto pt-5 pb-4">
                 <nav className="mt-5 flex-1 space-y-1 px-4">
