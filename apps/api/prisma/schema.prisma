@@ -103,7 +103,7 @@ model Company {
 
   tenantId    String
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
-  certificate  Certificate?
+  certificates Certificate[]
   nfeInvoices  Invoice[]
   nfeEvents    NfeEvent[]
   sefazLogs    SefazLog[]
