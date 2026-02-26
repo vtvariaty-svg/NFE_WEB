@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '../../index.js';
 import { z } from 'zod';
+import { NFSE_WORKER_STATE } from '../fiscal/nfse/services/worker.service.js';
 
 // Middleware to protect global admin routes
 export const globalAdminMiddleware = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -132,5 +133,21 @@ export async function adminRoutes(app: FastifyInstance) {
         await prisma.nfseProvider.delete({ where: { id } });
         return reply.status(200).send({ message: 'Provedor deletado com sucesso.' });
     });
-}
 
+    // ── Job Monitoring ────────────────────────────────────────────────────────
+    app.get('/jobs/status', async (request: FastifyRequest, reply: FastifyReply) => {
+        const pendingNfse = await prisma.nfseInvoice.count({ where: { status: 'PROCESSING' } });
+        const pendingNfe = await prisma.invoice.count({ where: { status: 'PROCESSING' } });
+        const failedNfse = await prisma.nfseInvoice.count({ where: { status: 'REJECTED' } });
+        const failedNfe = await prisma.invoice.count({ where: { status: 'REJECTED' } });
+
+        return reply.status(200).send({
+            workers: { nfsePollWorker: NFSE_WORKER_STATE },
+            queues: {
+                nfse: { pending: pendingNfse, failed: failedNfse },
+                nfe: { pending: pendingNfe, failed: failedNfe }
+            },
+            serverTime: new Date().toISOString()
+        });
+    });
+}
