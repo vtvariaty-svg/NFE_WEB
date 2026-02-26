@@ -63,9 +63,9 @@ export async function tenantRoutes(app: FastifyInstance) {
         // Fetch plan name from subscription
         const sub = await prisma.subscription.findFirst({
             where: { tenantId },
-            select: { planName: true }
+            include: { plan: true }
         });
-        const planName = sub?.planName || 'FREE';
+        const planName = sub?.plan?.name || 'FREE';
         const isOver = await TenantUsageControlService.isOverLimit(tenantId, planName);
         const { requests } = await TenantUsageControlService.getTodayUsage(tenantId);
         return { tenantId, planName, requestsToday: requests, overLimit: isOver };
