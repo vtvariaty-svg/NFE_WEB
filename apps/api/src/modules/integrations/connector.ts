@@ -191,7 +191,6 @@ export async function convertMarketplaceOrderToInternal(
     const order = await prisma.order.create({
         data: {
             tenantId,
-            customerId: customerId || null,
             status: 'PENDING',
             total: marketplaceOrder.totalAmount
         }
