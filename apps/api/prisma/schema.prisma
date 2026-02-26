@@ -120,7 +120,7 @@ model Certificate {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id])
 
-  companyId String  @unique
+  companyId String
   company   Company @relation(fields: [companyId], references: [id])
 
   certType     String    @default("A1")
@@ -131,9 +131,23 @@ model Certificate {
   validFrom    DateTime?
   validTo      DateTime?
   isActive     Boolean   @default(true)
+  revokedAt    DateTime?
+  label        String?   // optional friendly name e.g. "Certificado 2025"
 
+  logs      CertificateLog[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model CertificateLog {
+  id            String      @id @default(uuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id])
+  tenantId      String
+  action        String      // UPLOADED, RENEWED, REVOKED, USED_FOR_SIGNING, USED_FOR_TLS, EXPIRED_BLOCKED
+  detail        String?
+  ipAddress     String?
+  createdAt     DateTime    @default(now())
 }
 
 model Customer {

@@ -41,16 +41,15 @@ export class CertificateService {
         const pfxBase64 = pfxBuffer.toString('base64');
         const { encrypted, iv, salt } = this.encryptPfxPass(pfxBase64, password);
 
-        // 4. Disable all previous certificates for this company (if any)
+        // 4. Deactivate previous active certificates for this company
         await prisma.certificate.updateMany({
-            where: { companyId, tenantId },
+            where: { companyId, tenantId, isActive: true },
             data: { isActive: false }
         });
 
-        // 5. Upsert the new certificate into DB
-        const certificate = await prisma.certificate.upsert({
-            where: { companyId },
-            create: {
+        // 5. Create the new certificate
+        const certificate = await prisma.certificate.create({
+            data: {
                 tenantId,
                 companyId,
                 certType: 'A1',
@@ -61,19 +60,11 @@ export class CertificateService {
                 validFrom: certParams.validFrom,
                 validTo: certParams.validTo,
                 isActive: true
-            },
-            update: {
-                certType: 'A1',
-                pfxEncrypted: encrypted,
-                pfxIv: iv,
-                pfxSalt: salt,
-                thumbprint: certParams.thumbprint,
-                validFrom: certParams.validFrom,
-                validTo: certParams.validTo,
-                isActive: true,
-                updatedAt: new Date()
             }
         });
+
+        // 6. Log the upload
+        await this.logUsage(certificate.id, tenantId, 'UPLOADED', `Certificado A1 carregado: ${certParams.subjectName}`);
 
         return {
             id: certificate.id,
@@ -81,6 +72,45 @@ export class CertificateService {
             validTo: certificate.validTo,
             companyName: certParams.subjectName
         };
+    }
+
+    /**
+     * Renew certificate — upload new PFX, deactivate old, log RENEWED
+     */
+    static async renewCertificate(tenantId: string, companyId: string, pfxBuffer: Buffer, password: string, label?: string) {
+        const oldCert = await prisma.certificate.findFirst({
+            where: { tenantId, companyId, isActive: true }
+        });
+
+        const result = await this.uploadA1Certificate(tenantId, companyId, pfxBuffer, password);
+
+        // Update label if provided
+        if (label) {
+            await prisma.certificate.update({ where: { id: result.id }, data: { label } });
+        }
+
+        // Log renewal (linked to new cert)
+        await this.logUsage(result.id, tenantId, 'RENEWED',
+            oldCert ? `Renovação do certificado ${oldCert.thumbprint}` : 'Primeiro certificado'
+        );
+
+        return result;
+    }
+
+    /**
+     * Revoke a specific certificate
+     */
+    static async revokeCertificate(tenantId: string, certId: string) {
+        const cert = await prisma.certificate.findFirst({ where: { id: certId, tenantId } });
+        if (!cert) throw new Error('Certificado não encontrado.');
+
+        await prisma.certificate.update({
+            where: { id: certId },
+            data: { isActive: false, revokedAt: new Date() }
+        });
+
+        await this.logUsage(certId, tenantId, 'REVOKED', 'Certificado revogado pelo usuário');
+        return { success: true };
     }
 
     /**
@@ -103,16 +133,29 @@ export class CertificateService {
 
         // Expiration Check
         if (certRecord.validTo && certRecord.validTo < new Date()) {
+            await this.logUsage(certRecord.id, tenantId, 'EXPIRED_BLOCKED', 'Tentativa de uso de certificado expirado');
             throw new Error('O certificado vinculado à empresa está expirado.');
         }
 
         const payload = this.decryptPfxPass(certRecord.pfxEncrypted, certRecord.pfxIv, certRecord.pfxSalt);
+
+        // Log usage (fire-and-forget)
+        this.logUsage(certRecord.id, tenantId, 'USED_FOR_SIGNING').catch(() => { });
 
         return {
             ...certRecord,
             pfxBuffer: Buffer.from(payload.pfxBase64, 'base64'),
             password: payload.password
         };
+    }
+
+    /**
+     * Log certificate usage to CertificateLog
+     */
+    static async logUsage(certificateId: string, tenantId: string, action: string, detail?: string) {
+        await prisma.certificateLog.create({
+            data: { certificateId, tenantId, action, detail }
+        });
     }
 
     // --- Private / Internal Helpers ---
