@@ -262,6 +262,7 @@ model IntegrationAccount {
 model Plan {
   id              String         @id @default(uuid())
   name            String // FREE, PRO
+  planName        String?
   price           Float
   maxInvoices     Int
   maxIntegrations Int
@@ -269,19 +270,37 @@ model Plan {
 }
 
 model Subscription {
-  id                   String   @id @default(uuid())
-  tenantId             String   @unique
-  tenant               Tenant   @relation(fields: [tenantId], references: [id])
+  id                   String    @id @default(uuid())
+  tenantId             String    @unique
+  tenant               Tenant    @relation(fields: [tenantId], references: [id])
   planId               String
-  plan                 Plan     @relation(fields: [planId], references: [id])
-  status               String   @default("ACTIVE") // ACTIVE, PAST_DUE, CANCELED
+  plan                 Plan      @relation(fields: [planId], references: [id])
+  status               String    @default("ACTIVE") // ACTIVE, PAST_DUE, CANCELED, SUSPENDED
   stripeCustomerId     String?
-  stripeSubscriptionId String?  @unique
-  currentPeriodStart   DateTime @default(now())
+  stripeSubscriptionId String?   @unique
+  currentPeriodStart   DateTime  @default(now())
   currentPeriodEnd     DateTime
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  canceledAt           DateTime?
+  suspendedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  history              BillingHistory[]
 }
+
+model BillingHistory {
+  id              String       @id @default(uuid())
+  tenantId        String
+  subscriptionId  String
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id])
+  event           String       // ACTIVATED, RENEWED, UPGRADED, DOWNGRADED, CANCELED, SUSPENDED, PAYMENT_FAILED, PAYMENT_SUCCEEDED, REACTIVATED
+  fromPlanId      String?
+  toPlanId        String?
+  amount          Float?
+  stripeEventId   String?      @unique
+  metadata        String?      @db.Text
+  createdAt       DateTime     @default(now())
+}
+
 
 model UsageCounter {
   id        String @id @default(uuid())
