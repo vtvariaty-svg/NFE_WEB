@@ -33,6 +33,8 @@ model Tenant {
   legalArchives LegalArchive[]
   auditLogs     AuditLog[]
   apiUsage      TenantApiUsage[]
+  apiKeys       ApiKey[]
+  idempotencyKeys IdempotencyKey[]
 }
 
 // ─── Tenant API Usage (daily counter for rate analytics and billing) ─────────
@@ -185,6 +187,8 @@ model Customer {
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, document])
 }
 
 model Product {
@@ -247,6 +251,8 @@ model Invoice {
   tenantId String
   tenant   Tenant  @relation(fields: [tenantId], references: [id])
 
+  externalReference String?
+
   // NF-e 4.00 specifics
   serie   String?
   nnf     Int?
@@ -272,6 +278,8 @@ model Invoice {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   legalArchive LegalArchive?
+
+  @@unique([tenantId, externalReference])
 }
 
 model Plan {
@@ -641,4 +649,46 @@ model MarketplaceOrder {
   createdAt       DateTime @default(now())
 
   @@unique([integrationAccountId, externalOrderId])
+}
+
+// ─── API Keys para Consumo Externo M2M ──────────────────────────────────
+model ApiKey {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  name        String   // Nome da integração: "Automation WhatsApp"
+  prefix      String   // Primeiros 8 digitos: "sk_live_"
+  keyHash     String   @unique // Hash SHA-256 da chave real
+  hint        String   // ÚLTIMOS 4 digitos da chave: "4f2a" para exibição no UI
+  
+  scopes      String[] // Ex: ["nfe:issue", "nfe:read"] - Permissões granulares
+  isActive    Boolean  @default(true)
+  revokedAt   DateTime?
+  expiresAt   DateTime?
+  lastUsedAt  DateTime? // Rastreabilidade mínima de uso
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── Controle de Idempotência ──────────────────────────────────────────
+model IdempotencyKey {
+  id              String   @id @default(uuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  key             String   // The unique Idempotency-Key header value from client
+  requestPath     String
+  requestMethod   String
+  requestBodyHash String   // Hex Hash of the RAW request body to detect mutations
+  
+  responseStatus  Int?
+  responseBody    String?  @db.Text
+  
+  lockedAt        DateTime? // Lock timestamp. If lockedAt is > timeout, it expired
+  expiresAt       DateTime  // TTL record
+  createdAt       DateTime @default(now())
+
+  @@unique([tenantId, key])
 }

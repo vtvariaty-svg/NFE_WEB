@@ -23,6 +23,8 @@ import { auditRoutes } from './modules/fiscal/audit.routes.js';
 import { checkoutRoutes } from './modules/billing/checkout.routes.js';
 import { adminRoutes } from './modules/admin/admin.routes.js';
 import { fiscalOpsRoutes } from './modules/fiscal/fiscal-ops.routes.js';
+import { externalNfeRoutes } from './modules/external/external-nfe.routes.js';
+import { apiKeyRoutes } from './modules/external/api-key.routes.js';
 
 dotenv.config();
 
@@ -49,10 +51,10 @@ async function buildServer() {
         global: true,
         max: 300,
         timeWindow: '1 minute',
-        // Identify requests by tenantId from JWT if available, else by IP
+        // Identify requests by tenantId (from JWT or ApiKey) or fallback to IP
         keyGenerator: (request: FastifyRequest) => {
-            const jwtUser = (request as any).user as { tenantId?: string } | undefined;
-            return jwtUser?.tenantId || request.ip;
+            const tenantId = (request as any).tenantId; // Set by both auth middlewares
+            return tenantId || request.ip;
         },
         errorResponseBuilder: (_request, context) => ({
             error: 'Too Many Requests',
@@ -102,6 +104,10 @@ async function buildServer() {
     fastify.register(adminRoutes, { prefix: '/admin' });
     fastify.register(integrationRoutes, { prefix: '/integrations' });
     fastify.register(fiscalOpsRoutes, { prefix: '/fiscal-ops' });
+    
+    // External API routes (M2M automation)
+    fastify.register(apiKeyRoutes, { prefix: '/api-keys' });
+    fastify.register(externalNfeRoutes, { prefix: '/v1/external/nfe' });
 
     return fastify;
 }

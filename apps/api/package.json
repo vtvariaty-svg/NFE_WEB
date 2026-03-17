@@ -12,12 +12,12 @@
         "db:generate": "prisma generate"
     },
     "dependencies": {
-        "bcrypt": "^5.1.1",
         "@fastify/cors": "latest",
         "@fastify/jwt": "latest",
-        "@fastify/rate-limit": "latest",
+        "@fastify/rate-limit": "^10.3.0",
         "@prisma/client": "^5.22.0",
         "@xmldom/xmldom": "^0.8.11",
+        "bcrypt": "^5.1.1",
         "dotenv": "latest",
         "fastify": "latest",
         "fastify-type-provider-zod": "latest",
