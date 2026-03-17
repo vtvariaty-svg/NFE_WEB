@@ -134,3 +134,12 @@ async function lockRecord(id: string, path: string, method: string) {
         }
     });
 }
+
+// ─── Deterministic JSON Stringifier ───
+function stableStringify(obj: any): string {
+    if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
+    if (Array.isArray(obj)) return `[${obj.map(item => stableStringify(item)).join(',')}]`;
+    const keys = Object.keys(obj).sort();
+    const parts = keys.map(k => `"${k}":${stableStringify(obj[k])}`);
+    return `{${parts.join(',')}}`;
+}
