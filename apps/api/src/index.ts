@@ -24,6 +24,7 @@ import { checkoutRoutes } from './modules/billing/checkout.routes.js';
 import { adminRoutes } from './modules/admin/admin.routes.js';
 import { fiscalOpsRoutes } from './modules/fiscal/fiscal-ops.routes.js';
 import { externalNfeRoutes } from './modules/external/external-nfe.routes.js';
+import { externalCertificateRoutes } from './modules/external/external-certificates.routes.js';
 import { apiKeyRoutes } from './modules/external/api-key.routes.js';
 
 dotenv.config();
@@ -108,6 +109,7 @@ async function buildServer() {
     // External API routes (M2M automation)
     fastify.register(apiKeyRoutes, { prefix: '/api-keys' });
     fastify.register(externalNfeRoutes, { prefix: '/v1/external/nfe' });
+    fastify.register(externalCertificateRoutes, { prefix: '/v1/external/certificates' });
 
     return fastify;
 }
