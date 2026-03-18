@@ -85,9 +85,9 @@ export async function companyRoutes(app: FastifyInstance) {
         return reply.status(204).send();
     });
 
-    // ── GET /:id/fiscal-readiness ─────────────────────────────────────────────
-    app.get('/:id/fiscal-readiness', async (request, reply) => {
-        const tenantId = (request as any).tenantId;
+    // ── GET /:id/readiness  (alias: /:id/fiscal-readiness) ───────────────────
+    async function companyReadinessHandler(request: any, reply: any) {
+        const tenantId = request.tenantId;
         const { id } = request.params as { id: string };
 
         const company = await prisma.company.findFirst({
@@ -98,5 +98,8 @@ export async function companyRoutes(app: FastifyInstance) {
 
         const result = checkCompanyFiscalReadiness(company);
         return reply.send({ id: company.id, name: company.name, ...result });
-    });
+    }
+
+    app.get('/:id/readiness', companyReadinessHandler);
+    app.get('/:id/fiscal-readiness', companyReadinessHandler);
 }

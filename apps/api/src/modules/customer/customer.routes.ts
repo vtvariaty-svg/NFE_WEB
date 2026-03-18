@@ -47,6 +47,15 @@ export async function customerRoutes(app: FastifyInstance) {
         return { data: customers };
     });
 
+    // ── GET /:id ──────────────────────────────────────────────────────────────
+    app.get('/:id', async (request, reply) => {
+        const tenantId = (request as any).tenantId;
+        const { id } = request.params as { id: string };
+        const customer = await prisma.customer.findFirst({ where: { id, tenantId } });
+        if (!customer) return reply.status(404).send({ error: 'Cliente não encontrado.' });
+        return reply.send(customer);
+    });
+
     // ── PUT /:id ──────────────────────────────────────────────────────────────
     app.put('/:id', {
         schema: { body: updateBody }
@@ -77,9 +86,9 @@ export async function customerRoutes(app: FastifyInstance) {
         return reply.status(204).send();
     });
 
-    // ── GET /:id/fiscal-readiness ─────────────────────────────────────────────
-    app.get('/:id/fiscal-readiness', async (request, reply) => {
-        const tenantId = (request as any).tenantId;
+    // ── GET /:id/readiness  (alias: /:id/fiscal-readiness) ───────────────────
+    async function customerReadinessHandler(request: any, reply: any) {
+        const tenantId = request.tenantId;
         const { id } = request.params as { id: string };
 
         const customer = await prisma.customer.findFirst({
@@ -90,5 +99,8 @@ export async function customerRoutes(app: FastifyInstance) {
 
         const result = checkCustomerFiscalReadiness(customer);
         return reply.send({ id: customer.id, name: customer.name, ...result });
-    });
+    }
+
+    app.get('/:id/readiness', customerReadinessHandler);
+    app.get('/:id/fiscal-readiness', customerReadinessHandler);
 }

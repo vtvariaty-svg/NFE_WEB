@@ -43,6 +43,15 @@ export async function productRoutes(app: FastifyInstance) {
         return { data: products };
     });
 
+    // ── GET /:id ──────────────────────────────────────────────────────────────
+    app.get('/:id', async (request, reply) => {
+        const tenantId = (request as any).tenantId;
+        const { id } = request.params as { id: string };
+        const product = await prisma.product.findFirst({ where: { id, tenantId } });
+        if (!product) return reply.status(404).send({ error: 'Produto não encontrado.' });
+        return reply.send(product);
+    });
+
     // ── PUT /:id ──────────────────────────────────────────────────────────────
     app.put('/:id', {
         schema: { body: updateBody }
@@ -73,9 +82,9 @@ export async function productRoutes(app: FastifyInstance) {
         return reply.status(204).send();
     });
 
-    // ── GET /:id/fiscal-readiness ─────────────────────────────────────────────
-    app.get('/:id/fiscal-readiness', async (request, reply) => {
-        const tenantId = (request as any).tenantId;
+    // ── GET /:id/readiness  (alias: /:id/fiscal-readiness) ───────────────────
+    async function productReadinessHandler(request: any, reply: any) {
+        const tenantId = request.tenantId;
         const { id } = request.params as { id: string };
 
         const product = await prisma.product.findFirst({
@@ -86,5 +95,8 @@ export async function productRoutes(app: FastifyInstance) {
 
         const result = checkProductFiscalReadiness(product);
         return reply.send({ id: product.id, name: product.name, ...result });
-    });
+    }
+
+    app.get('/:id/readiness', productReadinessHandler);
+    app.get('/:id/fiscal-readiness', productReadinessHandler);
 }
