@@ -261,9 +261,14 @@ export class NuvemFiscalProvider implements IFiscalProvider {
 // ── Factory ───────────────────────────────────────────────────────────────────
 
 export function getNuvemFiscalProvider(): NuvemFiscalProvider {
-    if (process.env.NUVEM_FISCAL_ENABLED !== 'true') {
+    const enabled =
+        process.env.NUVEM_FISCAL_ENABLED === 'true' ||
+        process.env.FISCAL_PROVIDER === 'nuvem_fiscal';
+
+    if (!enabled) {
         throw new NuvemFiscalError(
-            'Integração com Nuvem Fiscal não está habilitada (NUVEM_FISCAL_ENABLED).',
+            'Integração com Nuvem Fiscal não está habilitada. ' +
+            'Defina NUVEM_FISCAL_ENABLED=true ou FISCAL_PROVIDER=nuvem_fiscal.',
             503
         );
     }

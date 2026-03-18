@@ -4,171 +4,380 @@ import { prisma } from '../../index.js';
 import { verifyApiKey } from './api-key.middleware.js';
 import { idempotencyMiddleware, cacheIdempotencyResponseHook } from './idempotency.middleware.js';
 import { EmissionService } from '../fiscal/nfe/services/emission.service.js';
+import { NuvemFiscalProvider } from '../fiscal/providers/nuvemFiscal/index.js';
+import type { NFePayload } from '../fiscal/fiscal.provider.js';
+
+// ── Provider selection ────────────────────────────────────────────────────────
+
+type FiscalProviderName = 'sefaz_direct' | 'nuvem_fiscal';
+
+function getFiscalProviderName(): FiscalProviderName {
+    const val = process.env.FISCAL_PROVIDER ?? 'sefaz_direct';
+    return val === 'nuvem_fiscal' ? 'nuvem_fiscal' : 'sefaz_direct';
+}
+
+// ── Status normalisation (Nuvem Fiscal → Invoice.status) ──────────────────────
+
+function toInvoiceStatus(nfStatus: string): string {
+    switch (nfStatus) {
+        case 'AUTORIZADO':  return 'AUTHORIZED';
+        case 'PROCESSANDO': return 'SENT';
+        case 'REJEITADO':   return 'REJECTED';
+        case 'CANCELADO':   return 'CANCELED';
+        case 'ERRO':        return 'ERROR';
+        default:            return 'SENT';
+    }
+}
+
+// ── Item fiscal data resolution ───────────────────────────────────────────────
+
+interface ItemFiscalData {
+    ncm: string;
+    icms_origem: string;
+    icms_situacao_tributaria: string;
+    pis_situacao_tributaria: string;
+    cofins_situacao_tributaria: string;
+}
+
+/**
+ * Resolves fiscal data for a single NF-e item.
+ * Priority:
+ *   1. NCM from request item (explicit, most reliable).
+ *   2. Product.ncm where Product.sku matches codigo_produto.
+ *   3. Error — never silently pass an invalid NCM.
+ *
+ * Tax CST codes (icmsCst, pisCst, cofinsCst) follow the same priority;
+ * fallback defaults are Simples Nacional (CRT 1/4) safe values.
+ */
+async function resolveItemFiscalData(
+    tenantId: string,
+    codigoProduto: string,
+    requestNcm?: string
+): Promise<ItemFiscalData> {
+    const product = await prisma.product.findFirst({
+        where: { tenantId, sku: codigoProduto },
+        select: { ncm: true, icmsCst: true, pisCst: true, cofinsCst: true, icmsOrigin: true }
+    });
+
+    const ncm = requestNcm?.trim() || product?.ncm?.trim();
+
+    if (!ncm) {
+        throw new Error(
+            `NCM ausente para o produto "${codigoProduto}". ` +
+            `Informe o campo "ncm" no item da requisição ` +
+            `ou cadastre o produto com NCM (Product.sku = "${codigoProduto}").`
+        );
+    }
+
+    return {
+        ncm,
+        // Simples Nacional (CRT 1/4) defaults — use Product values when available
+        icms_origem:               product?.icmsOrigin  ?? '0',
+        icms_situacao_tributaria:  product?.icmsCst     ?? '102',
+        pis_situacao_tributaria:   product?.pisCst      ?? '99',
+        cofins_situacao_tributaria: product?.cofinsCst  ?? '99',
+    };
+}
+
+// ── Zod schemas ───────────────────────────────────────────────────────────────
 
 const itemSchema = z.object({
-    codigo_produto: z.string(),
-    descricao: z.string(),
-    quantidade: z.number().positive(),
-    valor_unitario: z.number().positive(),
-    cfop: z.string().default('5102'),
-    ncm: z.string().optional(),
-    unidade: z.string().default('UN')
+    codigo_produto:  z.string(),
+    descricao:       z.string(),
+    quantidade:      z.number().positive(),
+    valor_unitario:  z.number().positive(),
+    cfop:            z.string().default('5102'),
+    ncm:             z.string().optional(),
+    unidade:         z.string().default('UN')
 });
 
 const customerSchema = z.object({
     document: z.string().min(11).max(14),
-    name: z.string(),
-    email: z.string().email().optional(),
+    name:     z.string(),
+    email:    z.string().email().optional(),
+    /**
+     * IBGE 7-digit city code for the customer address.
+     * Required when FISCAL_PROVIDER=nuvem_fiscal and not already stored for this customer.
+     * Source: Customer.ibgeCode (persisted after first request that provides it).
+     */
+    ibge_code: z.string().optional(),
     address: z.object({
-        street: z.string(),
-        number: z.string(),
+        street:  z.string(),
+        number:  z.string(),
         district: z.string(),
-        city: z.string(),
-        state: z.string().length(2),
+        city:    z.string(),
+        state:   z.string().length(2),
         zipCode: z.string().length(8)
     })
 });
 
 const emitRequestSchema = z.object({
     external_reference_id: z.string(),
-    company_id: z.string().uuid(),
-    natureza_operacao: z.string().default('Venda de Mercadoria'),
-    customer: customerSchema,
-    items: z.array(itemSchema).min(1)
+    company_id:            z.string().uuid(),
+    natureza_operacao:     z.string().default('Venda de Mercadoria'),
+    customer:              customerSchema,
+    items:                 z.array(itemSchema).min(1)
 });
 
-export async function externalNfeRoutes(app: FastifyInstance) {
-    // 1. Force Machine-to-Machine authentication
-    app.addHook('onRequest', verifyApiKey);
+// ── Routes ────────────────────────────────────────────────────────────────────
 
-    // 2. Wrap all successful requests or validation errors into Idempotency cache
+export async function externalNfeRoutes(app: FastifyInstance) {
+    app.addHook('onRequest', verifyApiKey);
     app.addHook('onSend', cacheIdempotencyResponseHook);
 
-    // POST /api/v1/nfe/issue
+    // ── POST /v1/external/nfe/issue ───────────────────────────────────────────
     app.post('/issue', {
         preHandler: [idempotencyMiddleware],
-        schema: {
-            body: emitRequestSchema
-        }
+        schema: { body: emitRequestSchema }
     }, async (request: FastifyRequest, reply: FastifyReply) => {
-        const tenantId = (request as any).tenantId;
-        const body = request.body as z.infer<typeof emitRequestSchema>;
-        const idempotencyKey = request.headers['idempotency-key'] as string; // Guaranteed by middleware
+        const tenantId         = (request as any).tenantId;
+        const body             = request.body as z.infer<typeof emitRequestSchema>;
+        const idempotencyKey   = request.headers['idempotency-key'] as string;
+        const providerName     = getFiscalProviderName();
 
         try {
-            // Business Duplication Check: Prevent processing identical orders
+            // ── Business duplication guard (provider-agnostic) ────────────────
             const existingInvoice = await prisma.invoice.findFirst({
                 where: { tenantId, externalReference: body.external_reference_id }
             });
-
             if (existingInvoice) {
-                // Return exactly the pattern of an already processed invoice but 409
                 return reply.status(409).send({
-                    error: `Uma NF-e com este external_reference_id (${body.external_reference_id}) já foi emitida ou processada.`,
-                    code: 'business_duplication',
+                    error: `NF-e com external_reference_id "${body.external_reference_id}" já processada.`,
+                    code:       'business_duplication',
                     invoice_id: existingInvoice.id,
-                    status: existingInvoice.status,
-                    protocol: existingInvoice.protNprot
+                    status:     existingInvoice.status,
+                    protocol:   existingInvoice.protNprot
                 });
             }
 
-            // Find or Create the customer in the context of the external application
-            // You can refine this to match existing models perfectly
+            // ── Upsert customer — persist ibgeCode when provided ──────────────
+            const ibgeCodeUpdate = body.customer.ibge_code
+                ? { ibgeCode: body.customer.ibge_code }
+                : {};
+
             const customer = await prisma.customer.upsert({
                 where: { tenantId_document: { tenantId, document: body.customer.document } },
                 update: {
-                    name: body.customer.name,
-                    email: body.customer.email,
-                    street: body.customer.address.street,
-                    number: body.customer.address.number,
+                    name:     body.customer.name,
+                    email:    body.customer.email,
+                    street:   body.customer.address.street,
+                    number:   body.customer.address.number,
                     district: body.customer.address.district,
-                    city: body.customer.address.city,
-                    state: body.customer.address.state,
-                    zipCode: body.customer.address.zipCode
+                    city:     body.customer.address.city,
+                    state:    body.customer.address.state,
+                    zipCode:  body.customer.address.zipCode,
+                    ...ibgeCodeUpdate
                 },
                 create: {
                     tenantId,
-                    type: body.customer.document.length > 11 ? 'JURIDICA' : 'FISICA',
+                    type:     body.customer.document.replace(/\D/g, '').length > 11 ? 'JURIDICA' : 'FISICA',
                     document: body.customer.document,
-                    name: body.customer.name,
-                    email: body.customer.email,
-                    street: body.customer.address.street,
-                    number: body.customer.address.number,
+                    name:     body.customer.name,
+                    email:    body.customer.email,
+                    street:   body.customer.address.street,
+                    number:   body.customer.address.number,
                     district: body.customer.address.district,
-                    city: body.customer.address.city,
-                    state: body.customer.address.state,
-                    zipCode: body.customer.address.zipCode
+                    city:     body.customer.address.city,
+                    state:    body.customer.address.state,
+                    zipCode:  body.customer.address.zipCode,
+                    ...ibgeCodeUpdate
                 }
             });
 
-            // Format payload to the EmissionService's expectation
-            // The API payload might differ slightly from the UI payload. We map it here.
+            // ── Fetch company (needed by both paths for environment/IBGE) ──────
+            const company = await prisma.company.findFirst({
+                where: { id: body.company_id, tenantId }
+            });
+            if (!company) {
+                return reply.status(404).send({ error: 'Empresa não encontrada ou não pertence ao tenant.' });
+            }
+
+            // ══════════════════════════════════════════════════════════════════
+            // PATH A — Nuvem Fiscal (sandbox / homologação only in this phase)
+            // ══════════════════════════════════════════════════════════════════
+            if (providerName === 'nuvem_fiscal') {
+
+                // Sandbox enforcement: block production until explicitly unlocked
+                if (process.env.NUVEM_FISCAL_DEFAULT_AMBIENTE === 'producao') {
+                    return reply.status(503).send({
+                        error: 'Nuvem Fiscal em produção ainda não está habilitada nesta fase. ' +
+                               'Defina NUVEM_FISCAL_DEFAULT_AMBIENTE=homologacao.',
+                        code: 'nfe_production_locked'
+                    });
+                }
+
+                // Resolve fiscal data for all items before any state change
+                const resolvedItems = await Promise.all(
+                    body.items.map(async (item) => {
+                        const fiscal = await resolveItemFiscalData(tenantId, item.codigo_produto, item.ncm);
+                        return { ...item, fiscal };
+                    })
+                );
+
+                // Resolve ibge_code_destinatario:
+                //   1. Persisted on Customer (from a previous request that included ibge_code)
+                //   2. Provided in this request body
+                //   3. Missing → adaptPayload() will throw a clear NuvemFiscalError
+                const ibgeDestinatario = customer.ibgeCode ?? body.customer.ibge_code;
+
+                // Build NFePayload with real domain data
+                const nfePayload: NFePayload = {
+                    natureza_operacao:            body.natureza_operacao,
+                    data_emissao:                 new Date().toISOString(),
+                    tipo_documento:               1,   // 1 = saída
+                    finalidade_emissao:           1,   // 1 = normal
+                    cnpj_emitente:                company.document,
+                    inscricao_estadual_emitente:  company.ie  ?? '',
+                    nome_emitente:                company.name,
+                    nome_fantasia_emitente:       company.name,
+                    logradouro_emitente:          company.street   ?? '',
+                    numero_emitente:              company.number   ?? '',
+                    bairro_emitente:              company.district ?? '',
+                    municipio_emitente:           company.city     ?? '',
+                    uf_emitente:                  company.state    ?? '',
+                    cep_emitente:                 company.zipCode  ?? '',
+                    nome_destinatario:            customer.name,
+                    cpf_cnpj_destinatario:        customer.document,
+                    inscricao_estadual_destinatario: customer.ie   ?? undefined,
+                    logradouro_destinatario:      customer.street  ?? '',
+                    numero_destinatario:          customer.number  ?? '',
+                    bairro_destinatario:          customer.district ?? '',
+                    municipio_destinatario:       customer.city    ?? '',
+                    uf_destinatario:              customer.state   ?? '',
+                    cep_destinatario:             customer.zipCode ?? '',
+                    // Extended fields — validated by adaptPayload()
+                    referencia:               body.external_reference_id,
+                    ibge_code_emitente:       company.ibgeCode    ?? undefined,
+                    ibge_code_destinatario:   ibgeDestinatario    ?? undefined,
+                    items: resolvedItems.map((item, idx) => ({
+                        numero_item:               idx + 1,
+                        codigo_produto:            item.codigo_produto,
+                        descricao:                 item.descricao,
+                        cfop:                      item.cfop,
+                        unidade_comercial:         item.unidade,
+                        quantidade_comercial:      item.quantidade,
+                        valor_unitario_comercial:  item.valor_unitario,
+                        valor_bruto:               item.quantidade * item.valor_unitario,
+                        ncm:                       item.fiscal.ncm,
+                        icms_origem:               item.fiscal.icms_origem,
+                        icms_situacao_tributaria:  item.fiscal.icms_situacao_tributaria,
+                        pis_situacao_tributaria:   item.fiscal.pis_situacao_tributaria,
+                        cofins_situacao_tributaria: item.fiscal.cofins_situacao_tributaria,
+                    }))
+                };
+
+                // Issue via Nuvem Fiscal — adaptPayload() validates all required fields
+                const provider = new NuvemFiscalProvider();
+                const nfResult = await provider.issueNFe(nfePayload);
+
+                // Persist Invoice for traceability (tpAmb=2 = homologação enforced)
+                // Provider invoice ID stored in xmlUnsigned as JSON stub.
+                // Before production: add Invoice.providerInvoiceId column via migration.
+                const invoice = await prisma.invoice.create({
+                    data: {
+                        tenantId,
+                        companyId:         body.company_id,
+                        type:              'NFE',
+                        status:            toInvoiceStatus(nfResult.status),
+                        tpAmb:             '2',  // homologação enforced
+                        externalReference: body.external_reference_id,
+                        xmlUnsigned: JSON.stringify({
+                            _provider:          'nuvem_fiscal',
+                            _providerInvoiceId: nfResult.externalId,
+                            _referencia:        body.external_reference_id,
+                            _status:            nfResult.status,
+                        })
+                    }
+                });
+
+                request.log.info({
+                    module:             'nfe_emission',
+                    provider:           'nuvem_fiscal',
+                    tenantId,
+                    companyId:          body.company_id,
+                    externalReference:  body.external_reference_id,
+                    providerInvoiceId:  nfResult.externalId,
+                    status:             nfResult.status,
+                    msg:                'NF-e emitida via Nuvem Fiscal (sandbox)'
+                });
+
+                return reply.status(200).send({
+                    request_id:           request.id,
+                    idempotency_key:      idempotencyKey,
+                    status:               nfResult.status,
+                    invoice_id:           invoice.id,           // internal DB ID (consistent with SEFAZ path)
+                    provider_invoice_id:  nfResult.externalId,  // Nuvem Fiscal UUID (for direct status polling)
+                    external_reference_id: body.external_reference_id,
+                    protocol:             null,                  // populated after authorization
+                    provider:             'nuvem_fiscal'
+                });
+            }
+
+            // ══════════════════════════════════════════════════════════════════
+            // PATH B — SEFAZ direct (existing, untouched)
+            // ══════════════════════════════════════════════════════════════════
             const nfePayload: any = {
                 naturezaOperacao: body.natureza_operacao,
                 destinatario: {
                     cpfCnpj: customer.document,
-                    nome: customer.name,
+                    nome:    customer.name,
                     endereco: {
                         logradouro: customer.street,
-                        numero: customer.number,
-                        bairro: customer.district,
-                        municipio: customer.city,
-                        uf: customer.state,
-                        cep: customer.zipCode
+                        numero:     customer.number,
+                        bairro:     customer.district,
+                        municipio:  customer.city,
+                        uf:         customer.state,
+                        cep:        customer.zipCode
                     }
                 },
                 itens: body.items.map((it, idx) => ({
-                    numeroItem: idx + 1,
-                    codigo: it.codigo_produto,
-                    descricao: it.descricao,
-                    cfop: it.cfop,
-                    unidade: it.unidade,
-                    quantidade: it.quantidade,
+                    numeroItem:   idx + 1,
+                    codigo:       it.codigo_produto,
+                    descricao:    it.descricao,
+                    cfop:         it.cfop,
+                    unidade:      it.unidade,
+                    quantidade:   it.quantidade,
                     valorUnitario: it.valor_unitario,
-                    ncm: it.ncm || '00000000'
+                    ncm:          it.ncm || '00000000'
                 }))
             };
 
-            // Call the real unified service
             const result = await EmissionService.emitNfe(
                 tenantId,
                 body.company_id,
                 nfePayload,
-                undefined // Using undefined for abstract orderId since it's external
+                undefined
             );
 
-            // Update local Invoice record with external reference
             if (result.invoiceId) {
                 await prisma.invoice.update({
                     where: { id: result.invoiceId },
-                    data: { externalReference: body.external_reference_id }
+                    data:  { externalReference: body.external_reference_id }
                 });
             }
 
             return reply.status(200).send({
-                request_id: request.id,
-                idempotency_key: idempotencyKey,
-                status: result.status,
-                invoice_id: result.invoiceId,
+                request_id:            request.id,
+                idempotency_key:       idempotencyKey,
+                status:                result.status,
+                invoice_id:            result.invoiceId,
                 external_reference_id: body.external_reference_id,
-                protocol: result.protocol
+                protocol:              result.protocol
             });
 
         } catch (error: any) {
-            // Unhandled exceptions (e.g certificate missing, database down) will return 500
-            // The idempotency hook will NOT cache 5xx so the user can genuinely retry
             request.log.error(error);
-            return reply.status(500).send({ 
-                error: 'Internal processing error', 
-                message: error.message,
+            return reply.status(500).send({
+                error:      'Internal processing error',
+                message:    error.message,
                 request_id: request.id
             });
         }
     });
 
-    // GET /api/v1/nfe/id/:invoiceId/status
+    // ── GET /v1/external/nfe/id/:invoiceId/status ─────────────────────────────
     app.get('/id/:invoiceId/status', async (request: FastifyRequest, reply: FastifyReply) => {
-        const tenantId = (request as any).tenantId;
+        const tenantId    = (request as any).tenantId;
         const { invoiceId } = request.params as any;
 
         const invoice = await prisma.invoice.findFirst({
@@ -178,18 +387,18 @@ export async function externalNfeRoutes(app: FastifyInstance) {
         if (!invoice) return reply.status(404).send({ error: 'Invoice not found by ID.' });
 
         return reply.status(200).send({
-            invoice_id: invoice.id,
+            invoice_id:            invoice.id,
             external_reference_id: invoice.externalReference,
-            status: invoice.status,
-            chave: invoice.chave44,
-            protocol: invoice.protNprot,
-            created_at: invoice.createdAt
+            status:                invoice.status,
+            chave:                 invoice.chave44,
+            protocol:              invoice.protNprot,
+            created_at:            invoice.createdAt
         });
     });
 
-    // GET /api/v1/nfe/ref/:externalReferenceId/status
+    // ── GET /v1/external/nfe/ref/:externalReferenceId/status ─────────────────
     app.get('/ref/:externalReferenceId/status', async (request: FastifyRequest, reply: FastifyReply) => {
-        const tenantId = (request as any).tenantId;
+        const tenantId              = (request as any).tenantId;
         const { externalReferenceId } = request.params as any;
 
         const invoice = await prisma.invoice.findFirst({
@@ -199,12 +408,12 @@ export async function externalNfeRoutes(app: FastifyInstance) {
         if (!invoice) return reply.status(404).send({ error: 'Invoice not found by External Reference.' });
 
         return reply.status(200).send({
-            invoice_id: invoice.id,
+            invoice_id:            invoice.id,
             external_reference_id: invoice.externalReference,
-            status: invoice.status,
-            chave: invoice.chave44,
-            protocol: invoice.protNprot,
-            created_at: invoice.createdAt
+            status:                invoice.status,
+            chave:                 invoice.chave44,
+            protocol:              invoice.protNprot,
+            created_at:            invoice.createdAt
         });
     });
 }
