@@ -45,7 +45,7 @@ export default function CertificatesPage() {
     const [showPassword, setShowPassword] = useState(false);
 
     useEffect(() => {
-        api.get("/companies").then(res => setCompanies(res.data.data)).catch(console.error);
+        api.get("/fiscal/companies").then(res => setCompanies(res.data.data)).catch(console.error);
     }, []);
 
     useEffect(() => {

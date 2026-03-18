@@ -28,8 +28,8 @@ export default function DashboardPage() {
         async function fetchStats() {
             try {
                 const [customers, products, orders, invoices, billing] = await Promise.all([
-                    api.get("/customers").catch(() => ({ data: { data: [] } })),
-                    api.get("/products").catch(() => ({ data: { data: [] } })),
+                    api.get("/fiscal/customers").catch(() => ({ data: { data: [] } })),
+                    api.get("/fiscal/products").catch(() => ({ data: { data: [] } })),
                     api.get("/orders").catch(() => ({ data: { data: [] } })),
                     api.get("/invoices").catch(() => ({ data: { data: [] } })),
                     api.get("/billing/status").catch(() => ({ data: null }))

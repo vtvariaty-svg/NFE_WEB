@@ -6,6 +6,7 @@ import { idempotencyMiddleware, cacheIdempotencyResponseHook } from './idempoten
 import { EmissionService } from '../fiscal/nfe/services/emission.service.js';
 import { NuvemFiscalProvider } from '../fiscal/providers/nuvemFiscal/index.js';
 import type { NFePayload } from '../fiscal/fiscal.provider.js';
+import { validateFiscalReadiness } from '../fiscal/validation/fiscal-readiness.js';
 
 // ── Provider selection ────────────────────────────────────────────────────────
 
@@ -233,6 +234,38 @@ export async function externalNfeRoutes(app: FastifyInstance) {
             // PATH A — Nuvem Fiscal (sandbox / homologação only in this phase)
             // ══════════════════════════════════════════════════════════════════
             if (providerName === 'nuvem_fiscal') {
+
+                // ── Pre-flight fiscal readiness check ─────────────────────────
+                // Fetch product fiscal data for all items up-front so we can
+                // report all missing fields in a single 422 instead of one-by-one.
+                const preflightProducts = await Promise.all(
+                    body.items.map(item =>
+                        prisma.product.findFirst({
+                            where: { tenantId, sku: item.codigo_produto },
+                            select: { ncm: true, icmsCst: true, pisCst: true, cofinsCst: true }
+                        }).then(p => ({
+                            codigoProduto: item.codigo_produto,
+                            ncm:           item.ncm ?? p?.ncm,
+                            icmsCst:       p?.icmsCst,
+                            pisCst:        p?.pisCst,
+                            cofinsCst:     p?.cofinsCst
+                        }))
+                    )
+                );
+
+                const preflight = validateFiscalReadiness({
+                    company:    company,
+                    customer:   customer,
+                    items:      preflightProducts,
+                    referencia: body.external_reference_id
+                });
+
+                if (!preflight.ready) {
+                    return reply.status(422).send({
+                        error:   'Cadastro fiscal incompleto. Corrija os dados antes de emitir.',
+                        missing: preflight.errors
+                    });
+                }
 
                 // Resolve fiscal data for all items before any state change
                 const resolvedItems = await Promise.all(

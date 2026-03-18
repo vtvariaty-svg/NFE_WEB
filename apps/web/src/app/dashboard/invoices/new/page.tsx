@@ -21,7 +21,7 @@ export default function NewInvoicePage() {
             try {
                 const [ordersRes, companiesRes] = await Promise.all([
                     api.get("/orders"),
-                    api.get("/companies")
+                    api.get("/fiscal/companies")
                 ]);
                 setOrders(ordersRes.data.data);
                 setCompanies(companiesRes.data.data);

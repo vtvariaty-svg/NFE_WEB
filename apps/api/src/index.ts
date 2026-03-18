@@ -23,6 +23,7 @@ import { auditRoutes } from './modules/fiscal/audit.routes.js';
 import { checkoutRoutes } from './modules/billing/checkout.routes.js';
 import { adminRoutes } from './modules/admin/admin.routes.js';
 import { fiscalOpsRoutes } from './modules/fiscal/fiscal-ops.routes.js';
+import { fiscalReadinessRoutes } from './modules/fiscal/fiscal-readiness.routes.js';
 import { externalNfeRoutes } from './modules/external/external-nfe.routes.js';
 import { externalCertificateRoutes } from './modules/external/external-certificates.routes.js';
 import { apiKeyRoutes } from './modules/external/api-key.routes.js';
@@ -92,10 +93,15 @@ async function buildServer() {
     // ── Register Modules ───────────────────────────────────────────────────────
     fastify.register(authRoutes, { prefix: '/auth' });
     fastify.register(tenantRoutes, { prefix: '/tenants' });
-    fastify.register(companyRoutes, { prefix: '/companies' });
+    
+    // Core Fiscal Shared Entities namespaces (Composite Auth)
+    // Both NFE_WEB Frontend and External API keys can use these unified services
+    fastify.register(companyRoutes, { prefix: '/fiscal/companies' });
+    fastify.register(customerRoutes, { prefix: '/fiscal/customers' });
+    fastify.register(productRoutes, { prefix: '/fiscal/products' });
+    fastify.register(fiscalReadinessRoutes, { prefix: '/fiscal/readiness' });
+
     fastify.register(certificateRoutes, { prefix: '/certificates' });
-    fastify.register(customerRoutes, { prefix: '/customers' });
-    fastify.register(productRoutes, { prefix: '/products' });
     fastify.register(orderRoutes, { prefix: '/orders' });
     fastify.register(invoiceRoutes, { prefix: '/invoices' });
     fastify.register(archiveRoutes, { prefix: '/archives' });
