@@ -46,6 +46,15 @@ export async function companyRoutes(app: FastifyInstance) {
         return { data: companies };
     });
 
+    // ── GET /:id ──────────────────────────────────────────────────────────────
+    app.get('/:id', async (request, reply) => {
+        const tenantId = (request as any).tenantId;
+        const { id } = request.params as { id: string };
+        const company = await prisma.company.findFirst({ where: { id, tenantId } });
+        if (!company) return reply.status(404).send({ error: 'Empresa não encontrada.' });
+        return reply.send(company);
+    });
+
     // ── PUT /:id ──────────────────────────────────────────────────────────────
     app.put('/:id', {
         schema: { body: updateBody }

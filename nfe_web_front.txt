@@ -1,0 +1,187 @@
+Você atuará como arquiteto e implementador backend/full-stack sênior no projeto NFE_WEB.
+
+OBJETIVO DESTA ETAPA
+Transformar o NFE_WEB no núcleo fiscal central consumido por dois frontends independentes:
+1. o próprio front do NFE_WEB
+2. o front do Automation-WhatsApp
+
+A regra é:
+- um único backend fiscal central
+- duas interfaces independentes
+- mesma fonte de verdade
+- mesma validação server-side
+- mesma lógica de emissão
+
+NÃO quero duplicação de regra de negócio em dois sistemas.
+Quero centralizar tudo no backend do NFE_WEB e deixar os dois fronts consumirem a mesma API.
+
+ESCOPO PRINCIPAL
+Quero estruturar e/ou completar uma API fiscal central para gerenciar:
+
+1. EMPRESAS EMISSORAS
+- listar
+- detalhar
+- criar/editar
+- validar prontidão fiscal
+- status de certificado/configuração quando aplicável
+
+2. CLIENTES / DESTINATÁRIOS
+- listar
+- detalhar
+- criar/editar
+- validar prontidão fiscal
+
+3. PRODUTOS
+- listar
+- detalhar
+- criar/editar
+- NCM
+- CFOP padrão, se fizer sentido
+- CSTs:
+  - icmsCst
+  - pisCst
+  - cofinsCst
+- validar prontidão fiscal
+
+4. VALIDAÇÃO FISCAL CENTRAL
+Criar validação server-side central para:
+- empresa pronta para emitir
+- cliente pronto para emissão
+- produto pronto para emissão
+- emissão pronta ou bloqueada
+- lista clara dos campos faltantes
+
+5. EMISSÃO
+Manter o fluxo de emissão centralizado no NFE_WEB:
+- montar payload fiscal a partir do domínio interno
+- integrar com provider selecionado
+- persistir histórico e status
+- consultar status
+- baixar XML
+- manter consistência para os dois frontends
+
+6. CONTRATO DE API PARA CONSUMO DOS DOIS SISTEMAS
+Quero endpoints consistentes e estáveis para que:
+- o front do NFE_WEB use essa API
+- o Automation-WhatsApp use a mesma API depois
+
+IMPORTANTE:
+não quero duas APIs diferentes para os dois fronts.
+Quero uma superfície única e coerente.
+
+ARQUITETURA ESPERADA
+Primeiro inspecione o que já existe no projeto:
+- rotas já existentes
+- modules/external
+- modules/fiscal
+- schema Prisma
+- controllers/services atuais
+- telas/consumo atual do front do NFE_WEB
+
+Depois:
+- reutilize o que já existe
+- complete o que faltar
+- evite duplicação
+- não reescreva o projeto inteiro
+
+ENDPOINTS / DOMÍNIOS QUE DEVEM EXISTIR OU SER COMPLETADOS
+Estruture algo equivalente a:
+
+EMPRESAS
+- GET /api/fiscal/companies
+- GET /api/fiscal/companies/:id
+- POST /api/fiscal/companies
+- PUT /api/fiscal/companies/:id
+- GET /api/fiscal/companies/:id/readiness
+
+CLIENTES
+- GET /api/fiscal/customers
+- GET /api/fiscal/customers/:id
+- POST /api/fiscal/customers
+- PUT /api/fiscal/customers/:id
+- GET /api/fiscal/customers/:id/readiness
+
+PRODUTOS
+- GET /api/fiscal/products
+- GET /api/fiscal/products/:id
+- POST /api/fiscal/products
+- PUT /api/fiscal/products/:id
+- GET /api/fiscal/products/:id/readiness
+
+VALIDAÇÃO GLOBAL / PRONTIDÃO
+- POST /api/fiscal/readiness/check
+  Recebe contexto de empresa + cliente + itens e retorna:
+  - pronto / não pronto
+  - campos faltantes
+  - erros bloqueantes
+  - avisos
+
+EMISSÃO / STATUS
+- manter ou completar os endpoints já existentes
+- garantir consistência para:
+  - emissão
+  - status
+  - histórico
+  - XML
+
+REQUISITOS IMPORTANTES
+- toda validação crítica deve ficar no server-side
+- os dois frontends devem depender da mesma regra de prontidão
+- não mascarar ausência de dados fiscais obrigatórios
+- erros devem ser claros, estruturados e utilizáveis pela UI
+- tenancy deve continuar preservada
+- auth deve continuar preservada
+- super admin não deve quebrar
+- não quebrar o fluxo M2M já existente
+- não quebrar o provider da Nuvem Fiscal nem o fluxo SEFAZ
+
+MODELAGEM
+Inspecione os models existentes e ajuste o mínimo necessário para suportar:
+- Company com dados fiscais completos
+- Customer com ibgeCode e dados necessários
+- Product com ncm/csts/cfop se aplicável
+- readiness/status de emissão quando fizer sentido
+Crie migrations seguras e versionadas se necessário.
+
+FRONT DO NFE_WEB
+Além do backend, adapte o front do NFE_WEB para consumir essa API central e exibir:
+- listas
+- formulários
+- indicadores de prontidão fiscal
+- bloqueios de emissão quando faltarem dados
+
+Não precisa ainda mexer no Automation-WhatsApp nesta etapa.
+Nesta etapa, o foco é deixar o NFE_WEB com:
+- backend central sólido
+- front próprio consumindo essa mesma API
+
+VALIDAÇÃO OBRIGATÓRIA
+Ao final:
+- rodar migrations
+- rodar build/typecheck/lint/testes aplicáveis
+- corrigir erros
+- confirmar que a API fiscal central ficou pronta para consumo externo pelos dois frontends
+
+ENTREGA FINAL OBRIGATÓRIA
+Ao terminar, me entregue:
+1. endpoints criados/completados
+2. arquivos criados
+3. arquivos alterados
+4. migrations criadas
+5. como ficou a validação de prontidão fiscal
+6. como o front do NFE_WEB passou a consumir essa API
+7. o que ficou pronto para o Automation-WhatsApp consumir depois
+8. riscos remanescentes antes de ligar o segundo frontend
+
+ORDEM DE EXECUÇÃO
+1. inspecionar o que já existe
+2. mapear gaps da API fiscal central
+3. completar modelagem/migrations se necessário
+4. implementar endpoints/serviços/validação
+5. adaptar o front do NFE_WEB
+6. validar build/typecheck/lint
+7. entregar relatório final
+
+IMPORTANTE
+Não criar duas lógicas fiscais diferentes.
+Quero um único núcleo fiscal central no NFE_WEB.

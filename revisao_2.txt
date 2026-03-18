@@ -1,0 +1,93 @@
+Você atuará como engenheiro backend sênior no projeto NFE_WEB.
+
+OBJETIVO DESTA ETAPA
+Agora sim quero avançar para a próxima fase:
+- construir o NFePayload completo a partir dos dados reais do domínio
+- plugar o NuvemFiscalProvider no fluxo real EM SANDBOX
+- preparar a primeira emissão real em sandbox sem quebrar o fluxo atual
+
+CONTEXTO
+Já está pronto:
+- provider Nuvem Fiscal
+- token provider
+- bootstrap de empresa/certificado/configuração
+- adaptPayload() validando corretamente:
+  - referencia
+  - ibge_code_emitente
+  - ibge_code_destinatario
+  - items[].ncm
+
+Agora falta o caller montar esse payload completo com dados reais antes de chamar o provider.
+
+ESCOPO EXATO
+
+1. LOCALIZAR O FLUXO REAL DE MONTAGEM DO NFePayload
+- encontre onde o NFePayload é construído hoje
+- identifique de onde vêm:
+  - Company
+  - Customer
+  - NfeItem / Product
+  - referência de negócio
+- identifique o ponto mais seguro para enriquecer o payload sem quebrar o fluxo atual
+
+2. ENRIQUECER O PAYLOAD COM DADOS REAIS DO DOMÍNIO
+Quero que o fluxo passe a preencher corretamente:
+- referencia
+- ibge_code_emitente a partir de Company.ibgeCode
+- ibge_code_destinatario a partir de Customer.ibgeCode
+- items[].ncm a partir de NfeItem.ncm ou Product.ncm
+
+Regra:
+- não inventar valores
+- se dado crítico faltar, retornar erro claro
+- manter rastreabilidade de qual campo faltou e de onde deveria vir
+
+3. PLUGAR O NUVEMFISCALPROVIDER EM SANDBOX
+- conectar o provider ao fluxo real de emissão apenas em sandbox/configuração controlada
+- não remover imediatamente o fluxo anterior sem necessidade
+- se fizer sentido, usar feature flag/env/provider selection
+- preservar compatibilidade com a arquitetura atual
+
+4. FLUXO DE TESTE EM SANDBOX
+Deixar pronto e funcional o caminho para:
+- bootstrapEmpresa()
+- issueNfe()
+- getNfeStatus()
+- downloadXml()
+
+5. TRATAMENTO DE ERROS
+- erro se faltar referencia
+- erro se faltar ibge emitente
+- erro se faltar ibge destinatario
+- erro se faltar NCM em qualquer item
+- erro de autenticação/config da Nuvem Fiscal
+- erro de empresa/certificado/configuração ausente
+- manter mensagens claras e técnicas
+
+6. NÃO FAZER AINDA
+- não mudar produção
+- não ativar provider em produção
+- não remover o provider/fluxo antigo sem necessidade
+- não fazer gambiarra com valores fiscais falsos
+
+VALIDAÇÃO OBRIGATÓRIA
+Ao final:
+- rodar typecheck/build/testes aplicáveis
+- confirmar que o fluxo sandbox ficou pronto
+- confirmar qual env/flag seleciona a Nuvem Fiscal
+- confirmar o ponto exato onde o payload passou a ser enriquecido
+
+ENTREGA FINAL
+Ao terminar, me entregue:
+1. onde o NFePayload era montado
+2. arquivos alterados
+3. como ficou o preenchimento de referencia, IBGE e NCM
+4. como ficou a seleção do provider em sandbox
+5. como executar o bootstrap da empresa
+6. como executar a primeira emissão real em sandbox
+7. resultado de build/typecheck/lint
+8. riscos remanescentes antes de produção
+
+IMPORTANTE
+Faça mudanças incrementais e seguras.
+Quero sandbox funcional primeiro.

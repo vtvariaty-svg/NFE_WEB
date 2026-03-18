@@ -1,0 +1,244 @@
+Você atuará como arquiteto e implementador full-stack sênior no projeto NFE_WEB.
+
+OBJETIVO DESTA ETAPA
+Implementar o módulo fiscal próprio do sistema, com BACKEND + FRONTEND, para que o NFE_WEB passe a ser a fonte de verdade dos dados fiscais necessários à emissão.
+
+A Nuvem Fiscal continuará sendo apenas o provider de emissão.
+O sistema interno deve passar a armazenar, editar, validar e servir os dados fiscais que hoje faltam ou estão incompletos para emissão real.
+
+META DE NEGÓCIO
+Quero que o sistema tenha estrutura própria para gerenciar:
+- empresas emissoras
+- clientes/destinatários
+- produtos
+- dados fiscais dos produtos
+- dados fiscais básicos necessários para montar o payload de NF-e
+- fluxo visual para cadastro/edição desses dados
+- validação para impedir emissão com cadastro incompleto
+
+NÃO quero depender da Nuvem Fiscal para “fornecer os dados fiscais do produto”.
+Ela deve apenas emitir a nota a partir de dados que o meu sistema já possui.
+
+CONTEXTO TÉCNICO
+- Já existe backend no NFE_WEB
+- Já existe provider da Nuvem Fiscal
+- Já existe fluxo M2M externo em /v1/external/nfe/issue
+- Já existe adaptPayload() e provider selection por FISCAL_PROVIDER
+- Já existe apps/api e apps/web no projeto
+- O sistema já possui modelagens como Company, Customer, Product, Invoice, etc.
+- Já foi identificado que dados como NCM, IBGE emitente/destinatário e CSTs precisam estar realmente no domínio interno
+
+OBJETIVO FUNCIONAL DO MÓDULO
+Implementar um módulo próprio no sistema para gerenciar e validar os dados necessários antes da emissão, incluindo:
+
+1. EMPRESA EMISSORA
+- dados cadastrais
+- CNPJ
+- razão social
+- endereço completo
+- código IBGE do município
+- regime tributário / CRT
+- status do certificado/configuração, se já houver estrutura
+
+2. CLIENTE / DESTINATÁRIO
+- documento (CPF/CNPJ)
+- nome/razão social
+- email
+- telefone, se existir no padrão do sistema
+- endereço completo
+- código IBGE do município
+- classificação mínima necessária para emissão
+
+3. PRODUTO
+- SKU/código interno
+- descrição
+- unidade
+- preço base
+- NCM
+- CFOP padrão, se fizer sentido no domínio
+- CSTs necessários:
+  - icmsCst
+  - pisCst
+  - cofinsCst
+- demais campos fiscais relevantes que a arquitetura atual já comporte com segurança
+
+4. VALIDAÇÃO DE EMISSÃO
+Antes de emitir NF-e, o backend deve validar se:
+- empresa possui ibgeCode
+- cliente possui ibgeCode
+- cada item possui NCM
+- cada item possui CSTs exigidos
+- referência da transação está presente
+- nenhum campo fiscal crítico está faltando silenciosamente
+
+Se faltar algo, erro explícito e claro.
+
+ESCOPO BACKEND
+
+1. INSPECIONAR MODELOS EXISTENTES
+Primeiro inspecione:
+- schema Prisma
+- rotas já existentes
+- models atuais de Company, Customer, Product, Invoice
+- qualquer tela/CRUD já existente no web
+- qualquer serviço que já faça upsert de customer/product/company
+
+2. MODELAGEM
+Ajustar a modelagem existente de forma incremental e segura.
+Aproveite os modelos existentes ao máximo.
+
+Completar ou adicionar os campos necessários para suportar emissão real, especialmente:
+- Company.ibgeCode
+- Customer.ibgeCode
+- Product.ncm
+- Product.icmsCst
+- Product.pisCst
+- Product.cofinsCst
+- Product.cfopPadrao se fizer sentido
+- outros campos mínimos estritamente necessários
+
+Criar migration segura e versionada.
+
+3. CRUD / API INTERNA
+Criar ou completar endpoints/serviços internos para:
+- listar/criar/editar empresas
+- listar/criar/editar clientes
+- listar/criar/editar produtos
+- validar prontidão fiscal de um cadastro
+
+Se já existirem rotas equivalentes, estenda sem quebrar o padrão.
+Não crie uma API paralela desnecessária.
+
+4. REGRAS DE VALIDAÇÃO
+Criar validações server-side para impedir:
+- produto sem NCM
+- produto sem CST obrigatório
+- cliente sem IBGE
+- empresa sem IBGE
+- emissão com cadastro fiscal incompleto
+
+Criar helper central, algo como:
+- validateFiscalReadiness(...)
+ou equivalente ao padrão do projeto.
+
+5. INTEGRAÇÃO COM O FLUXO DE EMISSÃO
+Sem reescrever tudo do zero:
+- conectar o fluxo atual de montagem de NFePayload aos dados persistidos do domínio
+- usar Product.ncm / Product.icmsCst / Product.pisCst / Product.cofinsCst
+- usar Company.ibgeCode
+- usar Customer.ibgeCode
+- remover dependência de defaults perigosos para produção
+- manter caminho sandbox funcionando
+
+6. STATUS DE PRONTIDÃO FISCAL
+Criar forma de o backend informar se:
+- empresa está pronta para emitir
+- cliente está pronto para emissão
+- produto está pronto para emissão
+- uma nota pode ou não ser emitida
+
+Isso deve permitir que o front mostre alertas e bloqueios antes da tentativa de emissão.
+
+ESCOPO FRONTEND
+
+1. CRIAR/COMPLETAR TELAS DO MÓDULO FISCAL
+No apps/web, implementar telas ou seções para:
+- Empresas
+- Clientes
+- Produtos
+- Validação fiscal / prontidão
+
+Use o padrão visual existente do projeto.
+Não invente UI fora do padrão.
+
+2. TELA DE EMPRESA
+Tela para visualizar/editar:
+- razão social
+- CNPJ
+- endereço
+- IBGE do município
+- CRT/regime tributário
+- indicador visual de prontidão fiscal
+
+3. TELA DE CLIENTES
+Tela para listar e editar clientes com:
+- documento
+- nome
+- endereço
+- código IBGE
+- indicador de prontidão fiscal
+
+4. TELA DE PRODUTOS
+Tela para listar e editar produtos com:
+- SKU
+- descrição
+- preço
+- NCM
+- CFOP padrão (se adotado)
+- icmsCst
+- pisCst
+- cofinsCst
+- indicador de prontidão fiscal
+
+5. ALERTAS DE DADOS FALTANTES
+No front, mostrar claramente:
+- quais campos faltam
+- o que impede a emissão
+- quais registros estão incompletos
+
+6. INTEGRAÇÃO COM EMISSÃO
+Na área de emissão:
+- mostrar aviso se produto/cliente/empresa não estiverem prontos
+- impedir emissão quando faltarem dados fiscais obrigatórios
+- exibir mensagens claras ao operador
+
+ARQUITETURA / REGRAS IMPORTANTES
+- não quebrar o fluxo atual
+- não remover o provider Nuvem Fiscal
+- não reimplementar emissão na UI
+- não inventar dados fiscais falsos
+- não mascarar campos obrigatórios ausentes
+- manter o sistema como fonte de verdade
+- deixar o provider apenas como camada de emissão
+
+COMPATIBILIDADE
+- manter compatibilidade com caminho SEFAZ existente
+- manter compatibilidade com Nuvem Fiscal em sandbox
+- preservar a API externa M2M já criada
+- preservar tenancy e auth do sistema
+- preservar padrões de rota/componentização já existentes
+
+VALIDAÇÃO OBRIGATÓRIA
+Ao final:
+- rodar migration
+- rodar build/typecheck/lint/testes aplicáveis
+- corrigir erros encontrados
+- confirmar que o sistema consegue montar payload fiscal real usando o domínio interno
+- confirmar que o front permite manter esses dados atualizados
+
+ENTREGA FINAL OBRIGATÓRIA
+Ao terminar, me entregue:
+1. arquivos criados
+2. arquivos alterados
+3. migration(s) criada(s)
+4. campos adicionados/ajustados nos models
+5. endpoints/serviços criados ou alterados
+6. telas front criadas/alteradas
+7. como ficou a validação de prontidão fiscal
+8. como o fluxo de emissão passou a usar os dados do domínio
+9. o que ainda falta antes de produção
+10. passos manuais para validar no navegador
+
+ORDEM DE EXECUÇÃO
+1. inspecionar schema e telas existentes
+2. mapear gaps de modelagem
+3. criar migration
+4. implementar backend/CRUD/validações
+5. implementar front
+6. conectar validação com emissão
+7. validar build/typecheck/lint
+8. entregar relatório final
+
+IMPORTANTE
+Não pare só no backend ou só no front.
+Quero o módulo completo, com backend + frontend, consistente com o projeto atual.

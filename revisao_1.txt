@@ -1,0 +1,114 @@
+Você atuará como engenheiro backend sênior no projeto NFE_WEB.
+
+OBJETIVO DESTA ETAPA
+NÃO plugar ainda o NuvemFiscalProvider no fluxo principal de emissão.
+Primeiro quero fechar os dois pré-requisitos que ainda impedem a primeira emissão real segura:
+
+1. Confirmar e corrigir o contrato exato da configuração de NF-e na Nuvem Fiscal
+2. Completar o adaptPayload() com os campos fiscais faltantes para emissão real
+
+CONTEXTO
+- Já existe um provider Nuvem Fiscal implementado em:
+  src/modules/fiscal/providers/nuvemFiscal/
+- Já existem:
+  - token.provider.ts
+  - http.client.ts
+  - nuvem-fiscal.bootstrap.ts
+  - nuvem-fiscal.provider.ts
+- Ainda NÃO quero conectar isso ao fluxo principal de emissão.
+- Quero primeiro eliminar incertezas contratuais e gaps de payload.
+
+BASE OFICIAL A RESPEITAR
+Considere como base oficial da Nuvem Fiscal:
+- autenticação OAuth2 client_credentials
+- token Bearer
+- sandbox recomendado para início
+- onboarding com:
+  - cadastro da empresa
+  - upload do certificado em Base64
+  - configuração do serviço
+- a documentação pública de empresas deixa explícito que cada serviço possui sua forma específica de configuração
+
+Portanto:
+- NÃO assuma endpoint/método de configuração de NF-e sem confirmar na referência correta
+- se o código atual estiver usando path/método não confirmado, corrija
+
+ESCOPO EXATO
+
+PARTE 1 — CONFIRMAÇÃO DO CONTRATO DE CONFIGURAÇÃO NF-E
+1. Inspecione o código já criado do provider Nuvem Fiscal
+2. Verifique como ficou implementado o configureNfeService()
+3. Confirme no material oficial/contrato já consultado qual é o endpoint/método correto de configuração do serviço NF-e
+4. Se o contrato atual estiver incorreto, ajuste
+5. Se o contrato ainda não puder ser confirmado com segurança total, deixe isso explicitamente tratado no código:
+   - estrutura pronta
+   - ponto isolado
+   - comentário/observação clara
+   - sem plugar no fluxo principal ainda
+
+IMPORTANTE
+Não quero hardcode de contrato incerto espalhado pela base.
+Quero isso isolado e claramente tratado.
+
+PARTE 2 — COMPLETAR adaptPayload()
+Quero que você localize o adaptPayload() que prepara os dados para emissão e complete os campos faltantes para emissão real na Nuvem Fiscal.
+
+Pelo relatório atual, ainda há TODOs explícitos para:
+- NCM
+- código do município (IBGE)
+
+Além disso, revise criticamente se existem outros campos fiscais relevantes faltando no adapter para NF-e real, conforme a estrutura atual do projeto.
+
+OBJETIVO DO adaptPayload()
+- transformar o payload interno atual em payload compatível com emissão real pela Nuvem Fiscal
+- minimizar gaps que hoje só permitiriam mock/sandbox superficial
+- deixar claro no código o que ainda depende de dado inexistente no domínio atual
+
+O QUE EU QUERO QUE VOCÊ FAÇA
+1. localizar o adaptPayload()
+2. identificar todos os campos obrigatórios/relevantes para NF-e que hoje não estão sendo corretamente preenchidos
+3. completar o que for possível com base na modelagem já existente
+4. onde não for possível completar por ausência de dado no domínio atual, fazer isto de forma profissional:
+   - apontar exatamente o campo faltante
+   - mostrar de onde ele deveria vir
+   - não inventar valor falso silenciosamente
+   - deixar erro claro ou fallback explicitamente controlado
+
+REGRAS IMPORTANTES
+- não inventar payload “aparentemente válido” com dados fiscais falsos
+- não mascarar falta de campo obrigatório com default perigoso
+- não plugar ainda o provider no fluxo principal
+- não quebrar o fluxo atual do sistema
+- manter mudanças incrementais e seguras
+
+VALIDAÇÕES OBRIGATÓRIAS
+Ao final:
+- rode build/typecheck/lint/testes aplicáveis
+- corrija eventuais erros
+- confirme se o provider continua consistente
+- confirme se o adapter ficou mais próximo da emissão real
+
+ENTREGA FINAL OBRIGATÓRIA
+Ao terminar, me entregue:
+1. onde estava a incerteza do contrato de configuração NF-e
+2. como ficou o configureNfeService() após a checagem
+3. quais campos do adaptPayload() estavam incompletos
+4. quais foram completados
+5. quais ainda dependem de modelagem/dados inexistentes no sistema
+6. arquivos alterados
+7. resultado de build/typecheck/lint
+8. se, após essa etapa, o projeto fica pronto para a próxima fase:
+   plugar o NuvemFiscalProvider no fluxo real em sandbox
+
+ORDEM DE EXECUÇÃO
+1. inspecionar o provider Nuvem Fiscal já criado
+2. revisar configureNfeService()
+3. revisar adaptPayload()
+4. corrigir o que for necessário
+5. validar tecnicamente
+6. entregar relatório final
+
+IMPORTANTE
+Esta etapa é preparatória.
+Ainda não quero emissão real plugada no fluxo principal.
+Quero eliminar incerteza contratual e gap de payload primeiro.

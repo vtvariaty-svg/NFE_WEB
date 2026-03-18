@@ -82,7 +82,7 @@ export default function CustomersPage() {
                 const { document, ...updateData } = form;
                 await api.put(`/fiscal/customers/${editingId}`, updateData);
             } else {
-                await api.post("/customers", form);
+                await api.post("/fiscal/customers", form);
             }
             setIsModalOpen(false);
             setEditingId(null);
