@@ -26,6 +26,8 @@ import { fiscalOpsRoutes } from './modules/fiscal/fiscal-ops.routes.js';
 import { externalNfeRoutes } from './modules/external/external-nfe.routes.js';
 import { externalCertificateRoutes } from './modules/external/external-certificates.routes.js';
 import { apiKeyRoutes } from './modules/external/api-key.routes.js';
+// Side-effect import: registers Nuvem Fiscal sync polling when FISCAL_PROVIDER=nuvem_fiscal
+import './modules/fiscal/nfe/services/nuvem-fiscal-sync.service.js';
 
 dotenv.config();
 

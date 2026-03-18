@@ -40,14 +40,52 @@ interface ItemFiscalData {
 }
 
 /**
- * Resolves fiscal data for a single NF-e item.
- * Priority:
- *   1. NCM from request item (explicit, most reliable).
- *   2. Product.ncm where Product.sku matches codigo_produto.
- *   3. Error — never silently pass an invalid NCM.
+ * Resolves a CST-like fiscal field for an NF-e item.
  *
- * Tax CST codes (icmsCst, pisCst, cofinsCst) follow the same priority;
- * fallback defaults are Simples Nacional (CRT 1/4) safe values.
+ * Rules:
+ *   - If the value exists (from Product or future request field) → use it.
+ *   - Sandbox (NUVEM_FISCAL_DEFAULT_AMBIENTE=homologacao):
+ *       fallback to the provided default, log a structured WARN.
+ *   - Production (any other value):
+ *       throw an explicit error — no silent defaults allowed.
+ */
+function resolveCst(
+    value: string | null | undefined,
+    fieldName: string,
+    codigoProduto: string,
+    fallback: string
+): string {
+    if (value?.trim()) return value.trim();
+
+    const isSandbox = (process.env.NUVEM_FISCAL_DEFAULT_AMBIENTE ?? 'homologacao') !== 'producao';
+
+    if (isSandbox) {
+        console.warn(JSON.stringify({
+            ts:            new Date().toISOString(),
+            level:         'warn',
+            module:        'nfe_cst_fallback',
+            codigoProduto,
+            field:         fieldName,
+            fallback,
+            msg:           `${fieldName} ausente — fallback sandbox aplicado. Cadastre o produto antes de produção.`
+        }));
+        return fallback;
+    }
+
+    throw new Error(
+        `Campo "${fieldName}" obrigatório para o produto "${codigoProduto}" em ambiente de produção. ` +
+        `Cadastre o campo no Product (sku="${codigoProduto}") ou informe no item da requisição.`
+    );
+}
+
+/**
+ * Resolves fiscal data for a single NF-e item.
+ * Priority for NCM:
+ *   1. Explicit field in request item.
+ *   2. Product.ncm where Product.sku = codigo_produto.
+ *   3. Error — never silently pass an invalid NCM in any environment.
+ *
+ * CST codes follow resolveCst() rules above.
  */
 async function resolveItemFiscalData(
     tenantId: string,
@@ -59,8 +97,8 @@ async function resolveItemFiscalData(
         select: { ncm: true, icmsCst: true, pisCst: true, cofinsCst: true, icmsOrigin: true }
     });
 
+    // NCM: no fallback in any environment — always required
     const ncm = requestNcm?.trim() || product?.ncm?.trim();
-
     if (!ncm) {
         throw new Error(
             `NCM ausente para o produto "${codigoProduto}". ` +
@@ -71,11 +109,10 @@ async function resolveItemFiscalData(
 
     return {
         ncm,
-        // Simples Nacional (CRT 1/4) defaults — use Product values when available
-        icms_origem:               product?.icmsOrigin  ?? '0',
-        icms_situacao_tributaria:  product?.icmsCst     ?? '102',
-        pis_situacao_tributaria:   product?.pisCst      ?? '99',
-        cofins_situacao_tributaria: product?.cofinsCst  ?? '99',
+        icms_origem:               product?.icmsOrigin ?? '0',
+        icms_situacao_tributaria:  resolveCst(product?.icmsCst,    'icmsCst',    codigoProduto, '102'),
+        pis_situacao_tributaria:   resolveCst(product?.pisCst,     'pisCst',     codigoProduto, '99'),
+        cofins_situacao_tributaria: resolveCst(product?.cofinsCst, 'cofinsCst',  codigoProduto, '99'),
     };
 }
 
@@ -197,15 +234,6 @@ export async function externalNfeRoutes(app: FastifyInstance) {
             // ══════════════════════════════════════════════════════════════════
             if (providerName === 'nuvem_fiscal') {
 
-                // Sandbox enforcement: block production until explicitly unlocked
-                if (process.env.NUVEM_FISCAL_DEFAULT_AMBIENTE === 'producao') {
-                    return reply.status(503).send({
-                        error: 'Nuvem Fiscal em produção ainda não está habilitada nesta fase. ' +
-                               'Defina NUVEM_FISCAL_DEFAULT_AMBIENTE=homologacao.',
-                        code: 'nfe_production_locked'
-                    });
-                }
-
                 // Resolve fiscal data for all items before any state change
                 const resolvedItems = await Promise.all(
                     body.items.map(async (item) => {
@@ -217,8 +245,12 @@ export async function externalNfeRoutes(app: FastifyInstance) {
                 // Resolve ibge_code_destinatario:
                 //   1. Persisted on Customer (from a previous request that included ibge_code)
                 //   2. Provided in this request body
-                //   3. Missing → adaptPayload() will throw a clear NuvemFiscalError
+                //   3. Missing → adaptPayload() throws NuvemFiscalError 422
                 const ibgeDestinatario = customer.ibgeCode ?? body.customer.ibge_code;
+
+                // Derive tpAmb from provider environment configuration — no hardcodes
+                const nfAmbiente = (process.env.NUVEM_FISCAL_DEFAULT_AMBIENTE ?? 'homologacao') as 'homologacao' | 'producao';
+                const tpAmb      = nfAmbiente === 'producao' ? '1' : '2';
 
                 // Build NFePayload with real domain data
                 const nfePayload: NFePayload = {
@@ -238,7 +270,7 @@ export async function externalNfeRoutes(app: FastifyInstance) {
                     cep_emitente:                 company.zipCode  ?? '',
                     nome_destinatario:            customer.name,
                     cpf_cnpj_destinatario:        customer.document,
-                    inscricao_estadual_destinatario: customer.ie   ?? undefined,
+                    inscricao_estadual_destinatario: customer.ie ?? undefined,
                     logradouro_destinatario:      customer.street  ?? '',
                     numero_destinatario:          customer.number  ?? '',
                     bairro_destinatario:          customer.district ?? '',
@@ -247,8 +279,8 @@ export async function externalNfeRoutes(app: FastifyInstance) {
                     cep_destinatario:             customer.zipCode ?? '',
                     // Extended fields — validated by adaptPayload()
                     referencia:               body.external_reference_id,
-                    ibge_code_emitente:       company.ibgeCode    ?? undefined,
-                    ibge_code_destinatario:   ibgeDestinatario    ?? undefined,
+                    ibge_code_emitente:       company.ibgeCode  ?? undefined,
+                    ibge_code_destinatario:   ibgeDestinatario  ?? undefined,
                     items: resolvedItems.map((item, idx) => ({
                         numero_item:               idx + 1,
                         codigo_produto:            item.codigo_produto,
@@ -270,46 +302,44 @@ export async function externalNfeRoutes(app: FastifyInstance) {
                 const provider = new NuvemFiscalProvider();
                 const nfResult = await provider.issueNFe(nfePayload);
 
-                // Persist Invoice for traceability (tpAmb=2 = homologação enforced)
-                // Provider invoice ID stored in xmlUnsigned as JSON stub.
-                // Before production: add Invoice.providerInvoiceId column via migration.
+                // Persist Invoice using dedicated provider columns (no xmlUnsigned hack)
                 const invoice = await prisma.invoice.create({
                     data: {
                         tenantId,
-                        companyId:         body.company_id,
-                        type:              'NFE',
-                        status:            toInvoiceStatus(nfResult.status),
-                        tpAmb:             '2',  // homologação enforced
-                        externalReference: body.external_reference_id,
-                        xmlUnsigned: JSON.stringify({
-                            _provider:          'nuvem_fiscal',
-                            _providerInvoiceId: nfResult.externalId,
-                            _referencia:        body.external_reference_id,
-                            _status:            nfResult.status,
-                        })
+                        companyId:          body.company_id,
+                        type:               'NFE',
+                        status:             toInvoiceStatus(nfResult.status),
+                        tpAmb,                                        // from env, not hardcoded
+                        externalReference:  body.external_reference_id,
+                        providerName:       'nuvem_fiscal',
+                        providerInvoiceId:  nfResult.externalId,
+                        providerStatus:     nfResult.status,           // raw provider status
+                        providerReference:  body.external_reference_id
                     }
                 });
 
                 request.log.info({
                     module:             'nfe_emission',
                     provider:           'nuvem_fiscal',
+                    ambiente:           nfAmbiente,
                     tenantId,
                     companyId:          body.company_id,
                     externalReference:  body.external_reference_id,
                     providerInvoiceId:  nfResult.externalId,
                     status:             nfResult.status,
-                    msg:                'NF-e emitida via Nuvem Fiscal (sandbox)'
+                    msg:                'NF-e emitida via Nuvem Fiscal'
                 });
 
                 return reply.status(200).send({
-                    request_id:           request.id,
-                    idempotency_key:      idempotencyKey,
-                    status:               nfResult.status,
-                    invoice_id:           invoice.id,           // internal DB ID (consistent with SEFAZ path)
-                    provider_invoice_id:  nfResult.externalId,  // Nuvem Fiscal UUID (for direct status polling)
+                    request_id:            request.id,
+                    idempotency_key:       idempotencyKey,
+                    status:                nfResult.status,
+                    invoice_id:            invoice.id,            // internal DB ID
+                    provider_invoice_id:   nfResult.externalId,   // Nuvem Fiscal UUID
                     external_reference_id: body.external_reference_id,
-                    protocol:             null,                  // populated after authorization
-                    provider:             'nuvem_fiscal'
+                    protocol:              null,                   // populated by sync worker after authorization
+                    provider:              'nuvem_fiscal',
+                    ambiente:              nfAmbiente
                 });
             }
 

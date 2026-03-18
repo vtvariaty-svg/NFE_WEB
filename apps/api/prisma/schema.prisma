@@ -272,6 +272,14 @@ model Invoice {
   rejectionCode String?
   rejectionMsg  String? @db.Text
 
+  // ── External provider fields ──────────────────────────────────────────────
+  // Populated when emission is handled by an external provider (e.g. Nuvem Fiscal).
+  // Null for direct SEFAZ SOAP emissions.
+  providerName      String?   // 'nuvem_fiscal' | 'sefaz_direct'
+  providerInvoiceId String?   // UUID returned by the external provider
+  providerStatus    String?   // Raw status string from provider (e.g. 'em_processamento')
+  providerReference String?   // referencia sent to the provider (mirrors externalReference)
+
   items  NfeItem[]
   events NfeEvent[]
 
