@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../../index.js';
 import { compositeAuthMiddleware } from '../auth/composite-auth.middleware.js';
-import { checkCompanyFiscalReadiness } from '../fiscal/validation/fiscal-readiness.js';
+import { checkCompanyFiscalReadiness, CertificateStatus } from '../fiscal/validation/fiscal-readiness.js';
 
 const companyBody = z.object({
     name: z.string(),
@@ -42,7 +42,9 @@ export async function companyRoutes(app: FastifyInstance) {
     // ── GET / ─────────────────────────────────────────────────────────────────
     app.get('/', async (request, reply) => {
         const tenantId = (request as any).tenantId;
-        const companies = await prisma.company.findMany({ where: { tenantId } });
+        const companies = await prisma.company.findMany({
+            where: { tenantId, isActive: true }
+        });
         return { data: companies };
     });
 
@@ -65,24 +67,26 @@ export async function companyRoutes(app: FastifyInstance) {
 
         const existing = await prisma.company.findFirst({ where: { id, tenantId } });
         if (!existing) return reply.status(404).send({ error: 'Empresa não encontrada.' });
+        if (!existing.isActive) return reply.status(409).send({ error: 'Empresa arquivada. Reative-a antes de editar.' });
 
-        const company = await prisma.company.update({
-            where: { id },
-            data
-        });
+        const company = await prisma.company.update({ where: { id }, data });
         return reply.send(company);
     });
 
-    // ── DELETE /:id ───────────────────────────────────────────────────────────
+    // ── DELETE /:id — SOFT DELETE ─────────────────────────────────────────────
     app.delete('/:id', async (request, reply) => {
         const tenantId = (request as any).tenantId;
         const { id } = request.params as { id: string };
 
         const existing = await prisma.company.findFirst({ where: { id, tenantId } });
         if (!existing) return reply.status(404).send({ error: 'Empresa não encontrada.' });
+        if (!existing.isActive) return reply.status(409).send({ error: 'Empresa já está arquivada.' });
 
-        await prisma.company.delete({ where: { id } });
-        return reply.status(204).send();
+        await prisma.company.update({
+            where: { id },
+            data: { isActive: false, archivedAt: new Date() }
+        });
+        return reply.send({ archived: true, id, archivedAt: new Date().toISOString() });
     });
 
     // ── GET /:id/readiness  (alias: /:id/fiscal-readiness) ───────────────────
@@ -96,8 +100,48 @@ export async function companyRoutes(app: FastifyInstance) {
         });
         if (!company) return reply.status(404).send({ error: 'Empresa não encontrada.' });
 
-        const result = checkCompanyFiscalReadiness(company);
-        return reply.send({ id: company.id, name: company.name, ...result });
+        // Resolve certificate status
+        const now = new Date();
+        const activeCert = await prisma.certificate.findFirst({
+            where: { companyId: id, tenantId, isActive: true },
+            orderBy: { createdAt: 'desc' },
+            select: { validTo: true, isActive: true }
+        });
+
+        const fiscalProvider = process.env.FISCAL_PROVIDER ?? 'sefaz_direct';
+        let cert: CertificateStatus | undefined;
+
+        if (activeCert) {
+            const daysToExpiry = activeCert.validTo
+                ? Math.floor((activeCert.validTo.getTime() - now.getTime()) / 86_400_000)
+                : null;
+            cert = {
+                exists: true,
+                expired: daysToExpiry !== null && daysToExpiry < 0,
+                daysToExpiry: daysToExpiry !== null ? Math.max(0, daysToExpiry) : null,
+                required: fiscalProvider === 'sefaz_direct'
+            };
+        } else {
+            cert = {
+                exists: false,
+                expired: false,
+                daysToExpiry: null,
+                required: fiscalProvider === 'sefaz_direct'
+            };
+        }
+
+        const result = checkCompanyFiscalReadiness(company, cert);
+        return reply.send({
+            id: company.id,
+            name: company.name,
+            ...result,
+            certificateStatus: {
+                exists: cert.exists,
+                expired: cert.expired,
+                daysToExpiry: cert.daysToExpiry,
+                required: cert.required
+            }
+        });
     }
 
     app.get('/:id/readiness', companyReadinessHandler);

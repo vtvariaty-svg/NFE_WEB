@@ -114,6 +114,9 @@ model Company {
   motivoContingencia   String?
   dhContingencia       String?
 
+  isActive   Boolean   @default(true)
+  archivedAt DateTime?
+
   tenantId    String
   tenant      Tenant       @relation(fields: [tenantId], references: [id])
   certificates Certificate[]
@@ -183,6 +186,9 @@ model Customer {
   ibgeCode   String? // Código IBGE do município
   phone      String?
 
+  isActive   Boolean   @default(true)
+  archivedAt DateTime?
+
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   createdAt DateTime @default(now())
@@ -208,6 +214,9 @@ model Product {
   pisCst     String? // ex: 99, 49
   cofinsCst  String? // ex: 99, 49
   icmsOrigin String  @default("0") // 0-Nacional, 1-Estrangeira, etc
+
+  isActive   Boolean   @default(true)
+  archivedAt DateTime?
 
   tenantId   String
   tenant     Tenant      @relation(fields: [tenantId], references: [id])

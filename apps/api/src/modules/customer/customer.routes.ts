@@ -43,7 +43,9 @@ export async function customerRoutes(app: FastifyInstance) {
     // ── GET / ─────────────────────────────────────────────────────────────────
     app.get('/', async (request, reply) => {
         const tenantId = (request as any).tenantId;
-        const customers = await prisma.customer.findMany({ where: { tenantId } });
+        const customers = await prisma.customer.findMany({
+            where: { tenantId, isActive: true }
+        });
         return { data: customers };
     });
 
@@ -66,24 +68,26 @@ export async function customerRoutes(app: FastifyInstance) {
 
         const existing = await prisma.customer.findFirst({ where: { id, tenantId } });
         if (!existing) return reply.status(404).send({ error: 'Cliente não encontrado.' });
+        if (!existing.isActive) return reply.status(409).send({ error: 'Cliente arquivado. Reative-o antes de editar.' });
 
-        const customer = await prisma.customer.update({
-            where: { id },
-            data
-        });
+        const customer = await prisma.customer.update({ where: { id }, data });
         return reply.send(customer);
     });
 
-    // ── DELETE /:id ───────────────────────────────────────────────────────────
+    // ── DELETE /:id — SOFT DELETE ─────────────────────────────────────────────
     app.delete('/:id', async (request, reply) => {
         const tenantId = (request as any).tenantId;
         const { id } = request.params as { id: string };
 
         const existing = await prisma.customer.findFirst({ where: { id, tenantId } });
         if (!existing) return reply.status(404).send({ error: 'Cliente não encontrado.' });
+        if (!existing.isActive) return reply.status(409).send({ error: 'Cliente já está arquivado.' });
 
-        await prisma.customer.delete({ where: { id } });
-        return reply.status(204).send();
+        await prisma.customer.update({
+            where: { id },
+            data: { isActive: false, archivedAt: new Date() }
+        });
+        return reply.send({ archived: true, id, archivedAt: new Date().toISOString() });
     });
 
     // ── GET /:id/readiness  (alias: /:id/fiscal-readiness) ───────────────────
