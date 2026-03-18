@@ -10,6 +10,7 @@ import {
     LogOut,
     Package,
     Receipt,
+    Settings,
     ShieldCheck,
     Users,
     X // Added X for closing mobile sidebar
@@ -24,6 +25,7 @@ const navigation = [
     { name: "Notas Fiscais", href: "/dashboard/invoices", icon: Receipt },
     { name: "Certificados", href: "/dashboard/certificates", icon: ShieldCheck },
     { name: "Billing", href: "/dashboard/billing", icon: CreditCard },
+    { name: "Configurações", href: "/dashboard/settings", icon: Settings },
 ];
 
 interface SidebarProps {
