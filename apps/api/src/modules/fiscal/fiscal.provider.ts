@@ -38,13 +38,43 @@ export interface NFePayload {
         icms_situacao_tributaria: string;
         pis_situacao_tributaria: string;
         cofins_situacao_tributaria: string;
+        /** NCM/SH code — required by Nuvem Fiscal and SEFAZ for NF-e emission. */
+        ncm?: string;
     }>;
+
+    // ── Extended fields required for Nuvem Fiscal emission ───────────────────
+    // These fields exist in the domain (Company.ibgeCode, Customer.ibgeCode)
+    // but are not always carried through the legacy FocusNFe payload.
+    // All optional here to remain backward-compatible with FocusNfeProvider.
+
+    /** IBGE 7-digit city code for the emitente address. Source: Company.ibgeCode */
+    ibge_code_emitente?: string;
+    /** IBGE 7-digit city code for the destinatário address. Source: Customer.ibgeCode */
+    ibge_code_destinatario?: string;
+    /**
+     * Stable business reference for idempotency and traceability.
+     * Must be unique per business transaction and stable across retries.
+     * Required by Nuvem Fiscal. If absent, adaptPayload() will throw.
+     */
+    referencia?: string;
+    /**
+     * Indicador do tipo de destinatário:
+     *   'consumidor_final' — CPF / non-IE contributor
+     *   'contribuinte_icms' — CNPJ with IE
+     * If absent, adaptPayload() will infer from CPF (11 digits) vs CNPJ (14 digits).
+     * Provide explicitly to override inference.
+     */
+    tipo_destinatario?: 'consumidor_final' | 'contribuinte_icms' | 'produtor_rural';
 }
 
 export interface IFiscalProvider {
     issueNFe(payload: NFePayload): Promise<{ status: string, externalId: string, message?: string }>;
     consultNFe(externalId: string): Promise<{ status: string, xmlUrl?: string, pdfUrl?: string }>;
     cancelNFe(externalId: string, reason: string): Promise<boolean>;
+
+    // Optional extended operations — providers may implement these
+    downloadXml?(externalId: string): Promise<string>;
+    sendEmail?(externalId: string, email: string): Promise<void>;
 }
 
 export class FocusNfeProvider implements IFiscalProvider {
