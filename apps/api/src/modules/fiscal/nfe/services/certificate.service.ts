@@ -69,6 +69,7 @@ export class CertificateService {
         return {
             id: certificate.id,
             thumbprint: certificate.thumbprint,
+            validFrom: certificate.validFrom,
             validTo: certificate.validTo,
             companyName: certParams.subjectName
         };

@@ -1,0 +1,200 @@
+Você atuará como arquiteto e engenheiro backend sênior no projeto NFE_WEB.
+
+CONTEXTO
+- Este projeto NFE_WEB será o backend fiscal principal do ecossistema.
+- Quero preparar a integração com a API da Nuvem Fiscal.
+- O objetivo desta etapa NÃO é sair implementando toda a emissão final de ponta a ponta sem critério.
+- O objetivo é preparar o ambiente, configuração, autenticação, adapter base, contratos e fluxo mínimo seguro para depois evoluir a emissão de NF-e.
+- Este backend será consumido no futuro pelo Automation-WhatsApp, então a integração deve nascer desacoplada e pronta para uso M2M.
+
+BASE OFICIAL DA DOCUMENTAÇÃO DA NUVEM FISCAL
+Considere como base oficial os seguintes pontos da documentação:
+1. Autenticação OAuth 2 com client_credentials
+2. Token endpoint:
+   https://auth.nuvemfiscal.com.br/oauth/token
+3. Ambientes:
+   - Sandbox: https://api.sandbox.nuvemfiscal.com.br
+   - Produção: https://api.nuvemfiscal.com.br
+4. Uso de Authorization: Bearer <token>
+5. Para NF-e, o escopo é:
+   nfe
+6. Antes de emitir é necessário:
+   - cadastrar empresa
+   - cadastrar/atualizar certificado digital
+   - configurar o serviço da empresa
+7. Cadastro de empresa:
+   POST /empresas
+8. Cadastro/atualização de certificado:
+   PUT /empresas/{cpf_cnpj}/certificado
+9. O certificado deve ser enviado em Base64
+
+OBJETIVO DESTA ETAPA
+Preparar o projeto NFE_WEB para integrar corretamente com a Nuvem Fiscal, com foco em:
+- envs
+- autenticação
+- token provider
+- adapter/provider Nuvem Fiscal
+- contratos/types
+- bootstrap de empresa/certificado/configuração
+- estrutura de serviço para futura emissão/consulta/download XML
+- sem quebrar o fluxo atual
+- sem acoplamento direto da UI
+
+ESCOPO EXATO
+
+1. INSPEÇÃO DO PROJETO
+- inspecione a estrutura atual do backend
+- identifique onde já existe provider/adapter fiscal
+- identifique onde encaixar um provider da Nuvem Fiscal sem quebrar o que já existe
+- respeite a arquitetura real do projeto
+
+2. CONFIGURAÇÃO DE AMBIENTE
+Prepare envs server-side para a Nuvem Fiscal, por exemplo:
+- NUVEM_FISCAL_ENABLED
+- NUVEM_FISCAL_ENVIRONMENT=sandbox|production
+- NUVEM_FISCAL_BASE_URL
+- NUVEM_FISCAL_AUTH_URL
+- NUVEM_FISCAL_CLIENT_ID
+- NUVEM_FISCAL_CLIENT_SECRET
+- NUVEM_FISCAL_SCOPE=nfe
+- NUVEM_FISCAL_TIMEOUT_MS
+- NUVEM_FISCAL_DEFAULT_AMBIENTE=homologacao|producao
+
+AJUSTES OBRIGATÓRIOS DE ESCOPO
+
+1. SANDBOX FIRST
+- A integração deve nascer preparada para ambiente sandbox da Nuvem Fiscal como padrão inicial.
+- Produção deve ficar apenas preparada por configuração/env, sem assumir credenciais ou base URL de produção nesta etapa.
+- Quero configuração clara para alternar entre sandbox e produção sem refatoração.
+
+2. BOOTSTRAP OPERACIONAL OBRIGATÓRIO
+Não quero apenas autenticação/token provider.
+Quero a base completa para onboarding fiscal da empresa emissora, incluindo:
+- cadastro/atualização da empresa na Nuvem Fiscal
+- upload/atualização do certificado digital A1 em Base64
+- preparação/configuração do serviço de NF-e da empresa
+- tratamento de erros desses três fluxos
+
+3. NÃO CONSIDERAR A INTEGRAÇÃO PRONTA APENAS POR CONSEGUIR GERAR TOKEN
+A etapa só estará corretamente preparada se o projeto ficar apto a:
+- autenticar
+- cadastrar empresa
+- subir certificado
+- preparar a configuração necessária do serviço
+- deixar o caminho pronto para emissão futura
+
+4. ENTREGA EXTRA
+No relatório final, inclua explicitamente:
+- como alternar sandbox/produção
+- quais envs são usadas em cada ambiente
+- como ficou o fluxo de onboarding da empresa emissora
+- quais dados ainda serão necessários para primeira emissão real
+
+Se o projeto já tiver padrão de config/env centralizado, reutilize exatamente esse padrão.
+
+3. TOKEN PROVIDER
+Implemente uma camada server-side responsável por:
+- obter access token OAuth 2 via client_credentials
+- cachear token até próximo da expiração
+- renovar token quando necessário
+- nunca expor client_secret
+- permitir uso por serviços internos
+
+4. ADAPTER / PROVIDER NUVEM FISCAL
+Crie uma camada desacoplada, algo como:
+- providers/nuvemFiscal/
+ou equivalente ao padrão do projeto
+
+Ela deve conter:
+- types/contracts
+- client HTTP server-side
+- token provider
+- adapter para operações futuras de NF-e
+
+Pelo menos deixe preparadas funções no padrão:
+- createOrUpdateCompany()
+- uploadCertificate()
+- configureCompanyNfe()
+- issueNfe()
+- getNfeStatus()
+- downloadNfeXml()
+- sendNfeEmail() se o contrato fizer sentido
+
+Se algum endpoint específico da referência oficial precisar ser confirmado, inspecione a documentação e deixe o código pronto com o contrato correto.
+
+5. BOOTSTRAP DE EMPRESA
+Prepare a estrutura para cadastro/atualização de empresa na Nuvem Fiscal.
+Quero que o projeto fique pronto para:
+- receber dados da empresa local
+- montar payload compatível com Nuvem Fiscal
+- enviar cadastro da empresa
+- registrar resposta
+- tratar erros operacionais
+
+6. CERTIFICADO DIGITAL
+Prepare a estrutura para:
+- receber certificado A1 local
+- converter/validar Base64 conforme necessário
+- enviar certificado e senha para a Nuvem Fiscal
+- tratar falhas de autenticação, certificado inválido e erros de integração
+
+7. CONFIGURAÇÃO DO SERVIÇO NF-E
+Prepare a estrutura de configuração da empresa para o serviço de NF-e.
+Objetivo:
+- deixar o backend pronto para configurar ambiente e parâmetros necessários da empresa emissora
+- não hardcodar regras específicas no código se elas puderem variar por empresa
+
+8. ESTRATÉGIA DE INTEGRAÇÃO
+A integração com a Nuvem Fiscal deve ficar por trás do backend atual.
+Não quero chamadas diretas do front para a Nuvem Fiscal.
+Quero um provider interno que no futuro possa ser chamado pela API externa do próprio NFE_WEB.
+
+9. TRATAMENTO DE ERROS E OBSERVABILIDADE
+Padronize:
+- timeout
+- erro de autenticação
+- erro de credenciais
+- erro de empresa não cadastrada
+- erro de certificado
+- erro de configuração ausente
+- erro de comunicação com a Nuvem Fiscal
+- logs técnicos sem expor segredo
+
+10. VALIDAÇÃO
+Ao final:
+- rode build/typecheck/lint/testes aplicáveis
+- corrija problemas encontrados
+- mantenha o projeto consistente
+
+ENTREGA FINAL
+Ao terminar, me entregue:
+1. estrutura encontrada
+2. arquivos criados
+3. arquivos alterados
+4. envs necessárias
+5. como ficou o token provider
+6. como ficou o adapter/provider da Nuvem Fiscal
+7. como ficou o fluxo de empresa/certificado/configuração
+8. o que já está pronto para emissão de NF-e
+9. o que ainda falta para plugar a emissão final no fluxo do sistema
+10. riscos remanescentes
+
+RESTRIÇÕES
+- não quebrar fluxo atual
+- não expor segredo ao front
+- não criar acoplamento desnecessário
+- não reimplementar lógica fiscal no lugar errado
+- não inventar endpoints sem confirmar o contrato oficial
+- se precisar confirmar detalhes da referência oficial, use a documentação da Nuvem Fiscal antes de implementar
+
+ORDEM DE EXECUÇÃO
+1. inspecionar o projeto
+2. localizar melhor ponto de integração
+3. preparar config/env
+4. implementar token provider
+5. implementar client/adapter Nuvem Fiscal
+6. preparar bootstrap de empresa
+7. preparar upload de certificado
+8. preparar configuração NF-e
+9. validar tecnicamente
+10. entregar relatório final
