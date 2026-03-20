@@ -75,16 +75,16 @@ export async function invoiceRoutes(app: FastifyInstance) {
 
             const order = await prisma.order.findFirst({
                 where: { id: orderId, tenantId },
-                include: { items: { include: { product: true } } }
+                include: { items: { include: { product: true } }, customer: true }
             });
             if (!order) return reply.status(404).send({ message: 'Order not found' });
 
             const company = await prisma.company.findFirst({ where: { id: companyId, tenantId } });
             if (!company) return reply.status(404).send({ message: 'Company not found' });
 
-            // Mocking a customer to simplify the boilerplate. In reality, order needs a customerId
-            const customer = await prisma.customer.findFirst({ where: { tenantId } });
-            if (!customer) return reply.status(400).send({ message: 'No customer available' });
+            const customer = (order as any).customer
+                || await prisma.customer.findFirst({ where: { tenantId } });
+            if (!customer) return reply.status(400).send({ message: 'Nenhum destinatário vinculado ao pedido. Selecione um cliente ao criar o pedido.' });
 
             const provider = getFiscalProvider(tenantId);
 

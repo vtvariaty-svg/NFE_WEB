@@ -10,6 +10,7 @@ export async function orderRoutes(app: FastifyInstance) {
     app.post('/', {
         schema: {
             body: z.object({
+                customerId: z.string().optional(),
                 items: z.array(z.object({
                     productId: z.string(),
                     quantity: z.number().int().min(1)
@@ -17,7 +18,7 @@ export async function orderRoutes(app: FastifyInstance) {
             })
         }
     }, async (request, reply) => {
-        const { items } = request.body as any;
+        const { customerId, items } = request.body as any;
         const tenantId = (request as any).tenantId;
 
         // Calculate total
@@ -48,11 +49,12 @@ export async function orderRoutes(app: FastifyInstance) {
                 tenantId,
                 total,
                 status: 'PENDING',
+                customerId: customerId || undefined,
                 items: {
                     create: orderItemsRecord
                 }
             },
-            include: { items: true }
+            include: { items: true, customer: true }
         });
 
         return reply.status(201).send(order);
@@ -62,7 +64,8 @@ export async function orderRoutes(app: FastifyInstance) {
         const tenantId = (request as any).tenantId;
         const orders = await prisma.order.findMany({
             where: { tenantId },
-            include: { items: true, invoices: true }
+            include: { items: { include: { product: true } }, invoices: true, customer: true },
+            orderBy: { createdAt: 'desc' }
         });
         return { data: orders };
     });
