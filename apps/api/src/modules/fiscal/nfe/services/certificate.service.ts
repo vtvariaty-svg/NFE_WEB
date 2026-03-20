@@ -17,11 +17,11 @@ export class CertificateService {
         // 1. Validate PFX password and extract details
         const certParams = this.extractPfxDetails(pfxBuffer, password);
 
-        if (!certParams.thumbprint || !certParams.subjectCnpj) {
+        if (!certParams.thumbprint) {
             throw new Error('Falha ao processar o certificado. Certifique-se de ser um e-CNPJ (A1) válido.');
         }
 
-        // 2. Validate against Company document (CNPJ)
+        // 2. Validate against Company document (CNPJ) — only when CNPJ could be extracted
         const company = await prisma.company.findFirst({
             where: { id: companyId, tenantId }
         });
@@ -30,11 +30,12 @@ export class CertificateService {
             throw new Error('Empresa não encontrada neste tenant.');
         }
 
-        const cleanCompanyCnpj = company.document.replace(/\D/g, '');
-        const cleanCertCnpj = certParams.subjectCnpj.replace(/\D/g, '');
-
-        if (cleanCompanyCnpj !== cleanCertCnpj) {
-            throw new Error(`O CNPJ do certificado (${cleanCertCnpj}) não corresponde ao CNPJ da empresa (${cleanCompanyCnpj}).`);
+        if (certParams.subjectCnpj) {
+            const cleanCompanyCnpj = company.document.replace(/\D/g, '');
+            const cleanCertCnpj = certParams.subjectCnpj.replace(/\D/g, '');
+            if (cleanCompanyCnpj !== cleanCertCnpj) {
+                throw new Error(`O CNPJ do certificado (${cleanCertCnpj}) não corresponde ao CNPJ da empresa (${cleanCompanyCnpj}).`);
+            }
         }
 
         // 3. Encrypt the PFX buffer and password together
@@ -225,7 +226,7 @@ export class CertificateService {
                 }
             }
 
-            // Try ICP-Brasil specific OID 2.16.76.1.3.3 (CNPJ in e-CNPJ certificates)
+            // Try ICP-Brasil OID 2.16.76.1.3.3 in Subject attributes
             if (!subjectCnpj) {
                 for (const attr of cert.subject.attributes) {
                     if (attr.type === '2.16.76.1.3.3') {
@@ -235,7 +236,24 @@ export class CertificateService {
                 }
             }
 
-            // Last resort: scan all subject attributes for any 14-digit value
+            // Try Subject Alternative Name extension (ICP-Brasil stores CNPJ here as otherName OID 2.16.76.1.3.3)
+            if (!subjectCnpj) {
+                try {
+                    const sanExt = cert.getExtension('subjectAltName') as any;
+                    if (sanExt && Array.isArray(sanExt.altNames)) {
+                        for (const altName of sanExt.altNames) {
+                            // type 0 = otherName; value may be raw bytes or string
+                            if (altName.type === 0) {
+                                const raw = (altName.value ?? altName.id ?? '').toString();
+                                const digits = raw.replace(/\D/g, '');
+                                if (digits.length >= 14) { subjectCnpj = digits.slice(-14); break; }
+                            }
+                        }
+                    }
+                } catch (_) { /* SAN parsing failed, continue */ }
+            }
+
+            // Scan all subject attributes for any 14-digit value (last resort)
             if (!subjectCnpj) {
                 for (const attr of cert.subject.attributes) {
                     const val = (attr.value ?? '').toString().replace(/\D/g, '');
