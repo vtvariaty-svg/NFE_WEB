@@ -217,11 +217,29 @@ export class CertificateService {
                 }
             }
 
-            // Try extracting from OUID (2.5.4.5) if not placed in CN
+            // Try extracting from SerialNumber (2.5.4.5) if not placed in CN
             if (!subjectCnpj) {
-                const snObj = cert.subject.getField('2.5.4.5'); // SerialNumber
+                const snObj = cert.subject.getField({ type: '2.5.4.5' });
                 if (snObj && snObj.value) {
-                    subjectCnpj = snObj.value.toString().replace(/\D/g, '');
+                    subjectCnpj = snObj.value.toString().replace(/\D/g, '').slice(0, 14);
+                }
+            }
+
+            // Try ICP-Brasil specific OID 2.16.76.1.3.3 (CNPJ in e-CNPJ certificates)
+            if (!subjectCnpj) {
+                for (const attr of cert.subject.attributes) {
+                    if (attr.type === '2.16.76.1.3.3') {
+                        const val = (attr.value ?? '').toString().replace(/\D/g, '');
+                        if (val.length === 14) { subjectCnpj = val; break; }
+                    }
+                }
+            }
+
+            // Last resort: scan all subject attributes for any 14-digit value
+            if (!subjectCnpj) {
+                for (const attr of cert.subject.attributes) {
+                    const val = (attr.value ?? '').toString().replace(/\D/g, '');
+                    if (val.length === 14) { subjectCnpj = val; break; }
                 }
             }
 
