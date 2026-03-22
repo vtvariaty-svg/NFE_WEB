@@ -220,7 +220,9 @@ export class NuvemFiscalProvider implements IFiscalProvider {
         const tipoDestinatario: string = p.tipo_destinatario ?? inferTipoDestinatario(p.cpf_cnpj_destinatario);
 
         return {
-            cpf_cnpj_emitente: p.cnpj_emitente,
+            emitente: {
+                cpf_cnpj: p.cnpj_emitente
+            },
             ambiente: defaultAmbiente,
             natureza_operacao: p.natureza_operacao,
             tipo_operacao: p.tipo_documento === 1 ? 'saida' : 'entrada',

@@ -112,8 +112,9 @@ export interface NuvemFiscalNfeItem {
 }
 
 export interface NuvemFiscalNfePayload {
-    /** CNPJ do emitente (digits only) */
-    cpf_cnpj_emitente: string;
+    emitente: {
+        cpf_cnpj: string;
+    };
     ambiente: NuvemFiscalNfeAmbiente;
     natureza_operacao: string;
     /** 'saida' | 'entrada' */

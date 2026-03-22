@@ -1,0 +1,1 @@
+fetch('https://dev.nuvemfiscal.com.br/docs/api/swagger.json').then(r=>r.json()).then(j=>{const s=j.components.schemas['Nfe.DTO.TnfePedidoEmissao'].properties; console.log(Object.keys(s));}).catch(e=>console.log(e.message));
