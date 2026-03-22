@@ -48,7 +48,11 @@ declare module 'fastify' {
 
 async function buildServer() {
     // ── CORS ──────────────────────────────────────────────────────────────────
-    await fastify.register(cors, { origin: '*' });
+    await fastify.register(cors, {
+        origin: '*',
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id', 'x-api-key']
+    });
 
     // ── Per-tenant rate limiting ───────────────────────────────────────────────
     // 300 requests / 1 minute per tenant (or IP for unauthenticated requests)
