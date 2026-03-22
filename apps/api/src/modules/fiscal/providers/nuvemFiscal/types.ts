@@ -112,9 +112,6 @@ export interface NuvemFiscalNfeItem {
 }
 
 export interface NuvemFiscalNfePayload {
-    emitente: {
-        cpf_cnpj: string;
-    };
     ambiente: NuvemFiscalNfeAmbiente;
     natureza_operacao: string;
     /** 'saida' | 'entrada' */
