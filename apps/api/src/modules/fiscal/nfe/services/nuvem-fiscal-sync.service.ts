@@ -77,7 +77,7 @@ export class NuvemFiscalSyncService {
             const pending = await prisma.invoice.findMany({
                 where: {
                     providerName:      'nuvem_fiscal',
-                    status:            'SENT',
+                    status:            { in: ['SENT', 'PROCESSING'] },
                     providerInvoiceId: { not: null }
                 },
                 select: {

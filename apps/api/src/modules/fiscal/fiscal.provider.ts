@@ -113,9 +113,12 @@ export class FocusNfeProvider implements IFiscalProvider {
     }
 }
 
-// Factory
 export function getFiscalProvider(tenantId: string): IFiscalProvider {
-    // In production, we fetch the FocusNFE API KEY configured for this specific tenant!
+    const isNuvemFiscal = process.env.NUVEM_FISCAL_ENABLED === 'true' || process.env.FISCAL_PROVIDER === 'nuvem_fiscal';
+    if (isNuvemFiscal) {
+        const { getNuvemFiscalProvider } = require('./providers/nuvemFiscal/index.js');
+        return getNuvemFiscalProvider();
+    }
     const focusApiKey = process.env.FOCUSNFE_API_KEY || 'mock-key';
     return new FocusNfeProvider(focusApiKey, true);
 }

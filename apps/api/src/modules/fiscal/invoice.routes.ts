@@ -115,6 +115,9 @@ export async function invoiceRoutes(app: FastifyInstance) {
                 uf_destinatario: customer.state || "RJ",
                 cep_destinatario: customer.zipCode?.replace(/\D/g, '') || "20000000",
 
+                ibge_code_emitente: company.ibgeCode || "3550308",
+                ibge_code_destinatario: customer.ibgeCode || "3304557",
+
                 items: order.items.map((item, index) => ({
                     numero_item: index + 1,
                     codigo_produto: item.product.sku || item.productId,
@@ -128,22 +131,48 @@ export async function invoiceRoutes(app: FastifyInstance) {
                     icms_situacao_tributaria: item.product.icmsCst || "102",
                     pis_situacao_tributaria: item.product.pisCst || "99",
                     cofins_situacao_tributaria: item.product.cofinsCst || "99",
+                    ncm: item.product.ncm || "00000000",
                 }))
             };
 
-            const providerResult = await provider.issueNFe(payload);
+            const isNuvemFiscal = process.env.NUVEM_FISCAL_ENABLED === 'true' || process.env.FISCAL_PROVIDER === 'nuvem_fiscal';
 
             const invoice = await prisma.invoice.create({
                 data: {
                     type,
-                    status: providerResult.status,
+                    status: 'DRAFT',
                     orderId: order.id,
-                    tenantId
+                    tenantId,
+                    providerName: isNuvemFiscal ? 'nuvem_fiscal' : 'focus_nfe'
                 }
             });
 
-            if (providerResult.status === 'AUTHORIZED') {
-                // Increment Usage
+            // Set stable invoice id as reference for NuvemFiscal
+            (payload as any).referencia = invoice.id;
+
+            let providerResult: { status: string, externalId: string, message?: string };
+            try {
+                providerResult = await provider.issueNFe(payload as any);
+            } catch (err: any) {
+                await prisma.invoice.update({
+                    where: { id: invoice.id },
+                    data: { status: 'ERROR', rejectionMsg: err.message }
+                });
+                return reply.status(500).send({ error: "Falha ao enviar ao provedor", details: err.message });
+            }
+
+            const finalStatus = providerResult.status === 'PROCESSANDO' ? 'PROCESSING' : providerResult.status;
+
+            await prisma.invoice.update({
+                where: { id: invoice.id },
+                data: {
+                    status: finalStatus,
+                    providerInvoiceId: providerResult.externalId,
+                    providerStatus: providerResult.status
+                }
+            });
+
+            if (finalStatus === 'AUTHORIZED' || finalStatus === 'AUTORIZADO') {
                 const now = new Date();
                 await prisma.usageCounter.upsert({
                     where: {
