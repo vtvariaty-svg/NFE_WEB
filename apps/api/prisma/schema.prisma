@@ -309,6 +309,8 @@ model Plan {
   price           Float
   maxInvoices     Int
   maxIntegrations Int
+  isActive        Boolean        @default(true)
+  description     String?
   subscriptions   Subscription[]
 }
 

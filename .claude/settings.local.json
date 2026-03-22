@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(./node_modules/.bin/tsc)",
+      "Bash(pm2 list:*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -r \"POST.*emit\\\\|GET.*nfe\\\\|POST.*nfe\" /c/Users/vinic/Documents/NFE_WEB/apps/api/src/modules/fiscal/*.routes.ts)",
+      "Bash(xargs ls:*)"
+    ]
+  }
+}

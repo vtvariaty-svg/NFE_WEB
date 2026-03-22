@@ -6,6 +6,16 @@ import tenantMiddleware from '../tenant/tenant.middleware.js';
 export async function billingRoutes(app: FastifyInstance) {
     app.addHook('onRequest', app.authenticate);
 
+    // ── GET /billing/plans — public catalog (JWT only, no tenant scope) ────────
+    app.get('/plans', async (request, reply) => {
+        const plans = await prisma.plan.findMany({
+            where: { isActive: true },
+            orderBy: { price: 'asc' },
+            select: { id: true, name: true, planName: true, price: true, maxInvoices: true, maxIntegrations: true, description: true }
+        });
+        return reply.status(200).send({ data: plans });
+    });
+
     // ── GET /billing/status — subscription + usage ────────────────────────────
     app.get('/status', {
         onRequest: [tenantMiddleware]
