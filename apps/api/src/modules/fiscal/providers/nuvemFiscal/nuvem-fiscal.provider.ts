@@ -217,42 +217,95 @@ export class NuvemFiscalProvider implements IFiscalProvider {
 
         // ── tipo_destinatario ─────────────────────────────────────────────────
         // Explicit override takes precedence; otherwise infer from document length.
-        const tipoDestinatario: string = p.tipo_destinatario ?? inferTipoDestinatario(p.cpf_cnpj_destinatario);
-
         return {
             ambiente: defaultAmbiente,
-            natureza_operacao: p.natureza_operacao,
-            tipo_operacao: p.tipo_documento === 1 ? 'saida' : 'entrada',
-            tipo_destinatario: tipoDestinatario,
-            data_emissao: p.data_emissao,
             referencia: p.referencia,
-            destinatario: {
-                cpf_cnpj: p.cpf_cnpj_destinatario,
-                nome: p.nome_destinatario,
-                endereco: {
-                    logradouro: p.logradouro_destinatario,
-                    numero: p.numero_destinatario,
-                    bairro: p.bairro_destinatario,
-                    codigo_municipio: p.ibge_code_destinatario,
-                    cidade: p.municipio_destinatario,
-                    uf: p.uf_destinatario,
-                    cep: p.cep_destinatario,
+            inf_nfe: {
+                ide: {
+                    natOp: p.natureza_operacao,
+                    tpNF: p.tipo_documento === 1 ? 1 : 0,
+                    dhEmi: p.data_emissao
                 },
-            },
-            itens: p.items.map((item) => ({
-                codigo: item.codigo_produto,
-                descricao: item.descricao,
-                ncm: item.ncm!,   // validated above — guaranteed non-empty
-                cfop: item.cfop,
-                unidade_comercial: item.unidade_comercial,
-                quantidade_comercial: item.quantidade_comercial,
-                valor_unitario_comercial: item.valor_unitario_comercial,
-                valor_bruto: item.valor_bruto,
-                icms_origem: Number(item.icms_origem) || 0,
-                icms_cst: item.icms_situacao_tributaria,
-                pis_cst: item.pis_situacao_tributaria,
-                cofins_cst: item.cofins_situacao_tributaria,
-            })),
+                emit: {
+                    CNPJ: p.cnpj_emitente,
+                    xEmit: "Raza social omitida", 
+                    // To successfully emit, Nuvem Fiscal needs complete issuer details OR relies on the configured one.
+                    enderEmit: {
+                        xLgr: "Rua",
+                        nro: "123",
+                        xBairro: "Centro",
+                        cMun: p.ibge_code_emitente,
+                        xMun: "Cidade",
+                        UF: "SP",
+                        CEP: "00000000"
+                    }
+                },
+                dest: {
+                    CPF: p.cpf_cnpj_destinatario?.length === 11 ? p.cpf_cnpj_destinatario : undefined,
+                    CNPJ: p.cpf_cnpj_destinatario?.length! > 11 ? p.cpf_cnpj_destinatario : undefined,
+                    xNome: p.nome_destinatario,
+                    enderDest: {
+                        xLgr: p.logradouro_destinatario,
+                        nro: p.numero_destinatario,
+                        xBairro: p.bairro_destinatario,
+                        cMun: p.ibge_code_destinatario,
+                        xMun: p.municipio_destinatario,
+                        UF: p.uf_destinatario,
+                        CEP: p.cep_destinatario?.replace(/\D/g, '') || "00000000"
+                    }
+                },
+                det: p.items.map((item, index) => ({
+                    nItem: index + 1,
+                    prod: {
+                        cProd: item.codigo_produto,
+                        xProd: item.descricao,
+                        NCM: item.ncm,
+                        CFOP: item.cfop,
+                        uCom: item.unidade_comercial,
+                        qCom: item.quantidade_comercial,
+                        vUnCom: item.valor_unitario_comercial,
+                        vProd: item.valor_bruto,
+                        uTrib: item.unidade_comercial,
+                        qTrib: item.quantidade_comercial,
+                        vUnTrib: item.valor_unitario_comercial,
+                        indTot: 1
+                    },
+                    imposto: {
+                        ICMS: {
+                            ICMSSN102: {
+                                orig: Number(item.icms_origem) || 0,
+                                CSOSN: item.icms_situacao_tributaria || "102"
+                            }
+                        }
+                    }
+                })),
+                total: {
+                    ICMSTot: {
+                        vBC: 0,
+                        vICMS: 0,
+                        vICMSDeson: 0,
+                        vFCP: 0,
+                        vBCST: 0,
+                        vST: 0,
+                        vFCPST: 0,
+                        vFCPSTRet: 0,
+                        vProd: p.items.reduce((acc, curr) => acc + curr.valor_bruto, 0),
+                        vFrete: 0,
+                        vSeg: 0,
+                        vDesc: 0,
+                        vII: 0,
+                        vIPI: 0,
+                        vIPIDevol: 0,
+                        vPIS: 0,
+                        vCOFINS: 0,
+                        vOutro: 0,
+                        vNF: p.items.reduce((acc, curr) => acc + curr.valor_bruto, 0)
+                    }
+                },
+                transp: {
+                    modFrete: 9
+                }
+            }
         };
     }
 }

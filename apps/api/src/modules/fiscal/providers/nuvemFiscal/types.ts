@@ -113,23 +113,8 @@ export interface NuvemFiscalNfeItem {
 
 export interface NuvemFiscalNfePayload {
     ambiente: NuvemFiscalNfeAmbiente;
-    natureza_operacao: string;
-    /** 'saida' | 'entrada' */
-    tipo_operacao: 'saida' | 'entrada';
-    /** 'consumidor_final' | 'produtor_rural' | 'contribuinte_icms' */
-    tipo_destinatario?: string;
-    data_emissao: string;           // ISO 8601
-    /** Client-side unique reference for idempotency */
     referencia?: string;
-    destinatario: {
-        cpf_cnpj?: string;
-        nome: string;
-        email?: string;
-        fone?: string;
-        endereco: NuvemFiscalEndereco;
-    };
-    itens: NuvemFiscalNfeItem[];
-    informacoes_adicionais_contribuinte?: string;
+    inf_nfe: any;
 }
 
 export type NuvemFiscalNfeStatus =
