@@ -154,11 +154,15 @@ export async function invoiceRoutes(app: FastifyInstance) {
             try {
                 providerResult = await provider.issueNFe(payload as any);
             } catch (err: any) {
+                request.log.error({ msg: "Erro ao emitir Nuvem Fiscal", error: err.message, detail: err.detail });
+                
+                const rejectionMsg = err.detail ? `${err.message} - Detalhes: ${JSON.stringify(err.detail)}` : err.message;
+                
                 await prisma.invoice.update({
                     where: { id: invoice.id },
-                    data: { status: 'ERROR', rejectionMsg: err.message }
+                    data: { status: 'ERROR', rejectionMsg: rejectionMsg.substring(0, 1000) }
                 });
-                return reply.status(500).send({ error: "Falha ao enviar ao provedor", details: err.message });
+                return reply.status(500).send({ error: "Falha ao enviar ao provedor", details: err.message, providerDetails: err.detail });
             }
 
             const finalStatus = providerResult.status === 'PROCESSANDO' ? 'PROCESSING' : providerResult.status;
