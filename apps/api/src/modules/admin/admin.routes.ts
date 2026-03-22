@@ -165,9 +165,9 @@ export async function adminRoutes(app: FastifyInstance) {
     // ── PUT /admin/tenants/:tenantId/plan — manual plan override (no Stripe sync) ──
     app.put('/tenants/:tenantId/plan', {
         schema: {
-            params: z.object({ tenantId: z.string().uuid() }),
+            params: z.object({ tenantId: z.string() }),
             body:   z.object({
-                planId: z.string().uuid(),
+                planId: z.string(),
                 reason: z.string().optional()
             })
         }

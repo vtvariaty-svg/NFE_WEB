@@ -114,7 +114,8 @@ export default function GlobalAdminPage() {
             fetchUsers(1);
             setTimeout(() => { setShowCreateUser(false); setModalSuccess(''); }, 1500);
         } catch (err: any) {
-            setModalError(err.response?.data?.error || 'Erro ao criar usuário.');
+            const data = err.response?.data;
+            setModalError(data?.error === 'Bad Request' && data?.message ? data.message : (data?.error || data?.message || 'Erro ao criar usuário.'));
         } finally {
             setModalLoading(false);
         }
@@ -134,7 +135,8 @@ export default function GlobalAdminPage() {
             fetchTenants(tenantPage);
             setTimeout(() => { setShowChangePlan(null); setModalSuccess(''); setSelectedPlanId(''); setPlanReason(''); }, 2500);
         } catch (err: any) {
-            setModalError(err.response?.data?.error || 'Erro ao alterar plano.');
+            const data = err.response?.data;
+            setModalError(data?.error === 'Bad Request' && data?.message ? data.message : (data?.error || data?.message || 'Erro ao alterar plano.'));
         } finally {
             setModalLoading(false);
         }
