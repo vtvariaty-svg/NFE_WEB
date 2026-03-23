@@ -13,7 +13,7 @@ function getConfig() {
     const authUrl = process.env.NUVEM_FISCAL_AUTH_URL;
     const clientId = process.env.NUVEM_FISCAL_CLIENT_ID;
     const clientSecret = process.env.NUVEM_FISCAL_CLIENT_SECRET;
-    const scope = process.env.NUVEM_FISCAL_SCOPE ?? 'nfe';
+    const scope = process.env.NUVEM_FISCAL_SCOPE ?? 'empresa nfe nfce nfse cte mdfe cep cnpj';
 
     if (!authUrl || !clientId || !clientSecret) {
         throw new NuvemFiscalError(
