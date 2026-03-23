@@ -217,68 +217,132 @@ export class NuvemFiscalProvider implements IFiscalProvider {
 
         // ── tipo_destinatario ─────────────────────────────────────────────────
         // Explicit override takes precedence; otherwise infer from document length.
+        // Derive UF code (cUF) from UF name — SEFAZ table mapping
+        const cUF_MAP: Record<string, number> = {
+            AC: 12, AL: 27, AP: 16, AM: 13, BA: 29, CE: 23, DF: 53,
+            ES: 32, GO: 52, MA: 21, MT: 51, MS: 50, MG: 31, PA: 15,
+            PB: 25, PR: 41, PE: 26, PI: 22, RJ: 33, RN: 24, RS: 43,
+            RO: 11, RR: 14, SC: 42, SP: 35, SE: 28, TO: 17
+        };
+        const cUF = cUF_MAP[p.uf_emitente?.toUpperCase()] ?? 35; // fallback SP
+
+        // NCM must be exactly 2 or 8 digits — pad to 8 if shorter
+        const formatNCM = (ncm: string | undefined): string => {
+            const digits = (ncm || '00000000').replace(/\D/g, '');
+            return digits.length < 8 ? digits.padStart(8, '0') : digits.substring(0, 8);
+        };
+
+        // cMun must be exactly 7 digits
+        const formatCMun = (code: string | undefined): string => {
+            const digits = (code || '0000000').replace(/\D/g, '');
+            return digits.padStart(7, '0').substring(0, 7);
+        };
+
+        const totalVProd = p.items.reduce((acc, curr) => acc + curr.valor_bruto, 0);
+
+        // Determine CSOSN — must be one of 102, 103, 300, 400 for ICMSSN102 group
+        const validCSO102 = ['102', '103', '300', '400'];
+        const csosn = validCSO102.includes(String(p.items[0]?.icms_situacao_tributaria)) 
+            ? p.items[0].icms_situacao_tributaria 
+            : '400'; // default: sem débito/crédito, Simples Nacional
+
         return {
             ambiente: defaultAmbiente,
             referencia: p.referencia,
             infNFe: {
+                versao: '4.00',
                 ide: {
+                    cUF: cUF,
+                    cNF: '00000001',   // 8 dígitos aleatórios (Nuvem Fiscal auto-gera se deixar)
                     natOp: p.natureza_operacao,
-                    tpNF: p.tipo_documento === 1 ? 1 : 0,
-                    dhEmi: p.data_emissao
+                    mod: 55,           // 55 = NF-e, 65 = NFC-e
+                    serie: 1,
+                    nNF: 1,            // Nuvem Fiscal auto-incrementa
+                    dhEmi: p.data_emissao,
+                    tpNF: 1,           // 1 = saída
+                    idDest: 1,         // 1 = operação interna
+                    cMunFG: formatCMun(p.ibge_code_emitente),
+                    tpImp: 1,          // 1 = DANFE retrato
+                    tpEmis: 1,         // 1 = emissão normal
+                    cDV: 0,            // Nuvem Fiscal calcula
+                    tpAmb: defaultAmbiente === 'producao' ? 1 : 2,
+                    finNFe: 1,         // 1 = NF-e normal
+                    indFinal: 1,       // 1 = consumidor final
+                    indPres: 9,        // 9 = operação não presencial (outros)
+                    procEmi: 0,        // 0 = emissão por aplicativo do contribuinte
+                    verProc: '1.0.0'
                 },
                 emit: {
                     CNPJ: p.cnpj_emitente,
-                    xNome: "Raza social omitida", 
-                    // To successfully emit, Nuvem Fiscal needs complete issuer details OR relies on the configured one.
+                    xNome: p.nome_emitente || 'EMPRESA EMITENTE',
                     enderEmit: {
-                        xLgr: "Rua",
-                        nro: "123",
-                        xBairro: "Centro",
-                        cMun: p.ibge_code_emitente,
-                        xMun: "Cidade",
-                        UF: "SP",
-                        CEP: "00000000"
-                    }
+                        xLgr: p.logradouro_emitente || 'Rua',
+                        nro: p.numero_emitente || 'SN',
+                        xBairro: p.bairro_emitente || 'Centro',
+                        cMun: formatCMun(p.ibge_code_emitente),
+                        xMun: p.municipio_emitente || 'Cidade',
+                        UF: p.uf_emitente || 'SP',
+                        CEP: (p.cep_emitente || '00000000').replace(/\D/g, '').padStart(8, '0')
+                    },
+                    IE: p.ie_emitente || 'ISENTO',
+                    CRT: 1   // 1 = Simples Nacional
                 },
                 dest: {
-                    CPF: p.cpf_cnpj_destinatario?.length === 11 ? p.cpf_cnpj_destinatario : undefined,
-                    CNPJ: p.cpf_cnpj_destinatario?.length! > 11 ? p.cpf_cnpj_destinatario : undefined,
+                    ...(p.cpf_cnpj_destinatario?.replace(/\D/g, '')?.length === 14
+                        ? { CNPJ: p.cpf_cnpj_destinatario.replace(/\D/g, '') }
+                        : { CPF: (p.cpf_cnpj_destinatario || '').replace(/\D/g, '') }),
                     xNome: p.nome_destinatario,
+                    indIEDest: 9,  // 9 = não contribuinte
                     enderDest: {
-                        xLgr: p.logradouro_destinatario,
-                        nro: p.numero_destinatario,
-                        xBairro: p.bairro_destinatario,
-                        cMun: p.ibge_code_destinatario,
-                        xMun: p.municipio_destinatario,
-                        UF: p.uf_destinatario,
-                        CEP: p.cep_destinatario?.replace(/\D/g, '') || "00000000"
+                        xLgr: p.logradouro_destinatario || 'Rua',
+                        nro: p.numero_destinatario || 'SN',
+                        xBairro: p.bairro_destinatario || 'Centro',
+                        cMun: formatCMun(p.ibge_code_destinatario),
+                        xMun: p.municipio_destinatario || 'Cidade',
+                        UF: p.uf_destinatario || 'SP',
+                        CEP: (p.cep_destinatario || '00000000').replace(/\D/g, '').padStart(8, '0'),
+                        cPais: 1058,
+                        xPais: 'BRASIL'
                     }
                 },
-                det: p.items.map((item, index) => ({
-                    nItem: index + 1,
-                    prod: {
-                        cProd: item.codigo_produto,
-                        xProd: item.descricao,
-                        NCM: item.ncm,
-                        CFOP: item.cfop,
-                        uCom: item.unidade_comercial,
-                        qCom: item.quantidade_comercial,
-                        vUnCom: item.valor_unitario_comercial,
-                        vProd: item.valor_bruto,
-                        uTrib: item.unidade_comercial,
-                        qTrib: item.quantidade_comercial,
-                        vUnTrib: item.valor_unitario_comercial,
-                        indTot: 1
-                    },
-                    imposto: {
-                        ICMS: {
-                            ICMSSN102: {
-                                orig: Number(item.icms_origem) || 0,
-                                CSOSN: item.icms_situacao_tributaria || "102"
+                det: p.items.map((item, index) => {
+                    const validCSO = validCSO102.includes(String(item.icms_situacao_tributaria))
+                        ? item.icms_situacao_tributaria
+                        : '400';
+                    return {
+                        nItem: index + 1,
+                        prod: {
+                            cProd: item.codigo_produto || String(index + 1).padStart(6, '0'),
+                            cEAN: 'SEM GTIN',
+                            xProd: item.descricao,
+                            NCM: formatNCM(item.ncm),
+                            CFOP: item.cfop || '5102',
+                            uCom: item.unidade_comercial || 'UN',
+                            qCom: item.quantidade_comercial,
+                            vUnCom: item.valor_unitario_comercial,
+                            vProd: item.valor_bruto,
+                            cEANTrib: 'SEM GTIN',
+                            uTrib: item.unidade_comercial || 'UN',
+                            qTrib: item.quantidade_comercial,
+                            vUnTrib: item.valor_unitario_comercial,
+                            indTot: 1
+                        },
+                        imposto: {
+                            ICMS: {
+                                ICMSSN400: {
+                                    orig: Number(item.icms_origem) || 0,
+                                    CSOSN: validCSO
+                                }
+                            },
+                            PIS: {
+                                PISAliq: { CST: '07', vBC: 0, pPIS: 0, vPIS: 0 }
+                            },
+                            COFINS: {
+                                COFINSAliq: { CST: '07', vBC: 0, pCOFINS: 0, vCOFINS: 0 }
                             }
                         }
-                    }
-                })),
+                    };
+                }),
                 total: {
                     ICMSTot: {
                         vBC: 0,
@@ -289,7 +353,7 @@ export class NuvemFiscalProvider implements IFiscalProvider {
                         vST: 0,
                         vFCPST: 0,
                         vFCPSTRet: 0,
-                        vProd: p.items.reduce((acc, curr) => acc + curr.valor_bruto, 0),
+                        vProd: totalVProd,
                         vFrete: 0,
                         vSeg: 0,
                         vDesc: 0,
@@ -299,11 +363,17 @@ export class NuvemFiscalProvider implements IFiscalProvider {
                         vPIS: 0,
                         vCOFINS: 0,
                         vOutro: 0,
-                        vNF: p.items.reduce((acc, curr) => acc + curr.valor_bruto, 0)
+                        vNF: totalVProd
                     }
                 },
                 transp: {
-                    modFrete: 9
+                    modFrete: 9  // 9 = sem ocorrência de transporte
+                },
+                pag: {
+                    detPag: [{
+                        tPag: '01',  // 01 = dinheiro (padrão genérico para sandbox)
+                        vPag: totalVProd
+                    }]
                 }
             }
         };

@@ -13,6 +13,7 @@ export interface NFePayload {
     municipio_emitente: string;
     uf_emitente: string;
     cep_emitente: string;
+    ie_emitente?: string;   // Inscrição Estadual do emitente (SEFAZ tag IE)
 
     // Destinatário
     nome_destinatario: string;
