@@ -4,21 +4,24 @@ import { prisma } from '../../index.js';
 import { compositeAuthMiddleware } from '../auth/composite-auth.middleware.js';
 import { checkCustomerFiscalReadiness } from '../fiscal/validation/fiscal-readiness.js';
 
+// ── Helpers de validação fiscal ──────────────────────────────────────────────
+const onlyDigits = (n: number) => z.string().regex(new RegExp(`^\\d{${n}}$`), `Deve ter exatamente ${n} dígitos numéricos`);
+
 const customerBody = z.object({
-    name: z.string(),
-    document: z.string(),
-    type: z.string().optional(),
+    name: z.string().min(2, 'Nome é obrigatório'),
+    document: z.string().regex(/^\d{11}$|^\d{14}$/, 'Documento deve ter 11 dígitos (CPF) ou 14 dígitos (CNPJ), sem pontuação'),
+    type: z.enum(['FISICA', 'JURIDICA']).optional(),
     ie: z.string().optional(),
     im: z.string().optional(),
-    email: z.string().optional(),
-    street: z.string().optional(),
-    number: z.string().optional(),
+    email: z.string().email('Email inválido').optional(),
+    street: z.string().min(1, 'Logradouro é obrigatório'),
+    number: z.string().min(1, 'Número é obrigatório'),
     complement: z.string().optional(),
-    district: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().optional(),
-    zipCode: z.string().optional(),
-    ibgeCode: z.string().optional(),
+    district: z.string().min(1, 'Bairro é obrigatório'),
+    city: z.string().min(1, 'Cidade é obrigatória'),
+    state: z.string().length(2, 'UF deve ter 2 letras').toUpperCase(),
+    zipCode: onlyDigits(8).describe('CEP — 8 dígitos'),
+    ibgeCode: onlyDigits(7).describe('Código IBGE do município — 7 dígitos'),
     phone: z.string().optional()
 });
 

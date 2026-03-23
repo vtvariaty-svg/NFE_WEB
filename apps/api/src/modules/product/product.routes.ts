@@ -4,17 +4,20 @@ import { prisma } from '../../index.js';
 import { compositeAuthMiddleware } from '../auth/composite-auth.middleware.js';
 import { checkProductFiscalReadiness } from '../fiscal/validation/fiscal-readiness.js';
 
+// ── Helpers de validação fiscal ──────────────────────────────────────────────
+const digits = (n: number) => z.string().regex(new RegExp(`^\\d{${n}}$`), `Deve ter exatamente ${n} dígitos numéricos`);
+
 const productBody = z.object({
-    name: z.string(),
-    price: z.number(),
+    name: z.string().min(1, 'Nome do produto é obrigatório'),
+    price: z.number().positive('Preço deve ser positivo'),
     sku: z.string().optional(),
-    ncm: z.string().optional(),
-    cest: z.string().optional(),
-    cfop: z.string().optional(),
+    ncm: digits(8).describe('NCM — 8 dígitos. Consulte tabela da Receita Federal'),
+    cest: z.string().regex(/^\d{7}$/, 'CEST deve ter 7 dígitos').optional().or(z.literal('')).optional(),
+    cfop: digits(4).describe('CFOP — 4 dígitos. Ex: 5102 para venda dentro do estado'),
     unit: z.string().optional(),
-    icmsCst: z.string().optional(),
-    pisCst: z.string().optional(),
-    cofinsCst: z.string().optional(),
+    icmsCst: z.string().min(2, 'CST ICMS é obrigatório. Simples Nacional: 102, 400 ou 500'),
+    pisCst: z.string().min(2, 'CST PIS é obrigatório. Simples Nacional: 07'),
+    cofinsCst: z.string().min(2, 'CST COFINS é obrigatório. Simples Nacional: 07'),
     icmsOrigin: z.string().optional()
 });
 

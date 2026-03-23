@@ -4,20 +4,25 @@ import { prisma } from '../../index.js';
 import { compositeAuthMiddleware } from '../auth/composite-auth.middleware.js';
 import { checkCompanyFiscalReadiness, CertificateStatus } from '../fiscal/validation/fiscal-readiness.js';
 
+// ── Helpers de validação fiscal ──────────────────────────────────────────────
+const onlyDigits = (n: number) => z.string().regex(new RegExp(`^\\d{${n}}$`), `Deve ter exatamente ${n} dígitos numéricos`);
+const onlyDigitsMax = (min: number, max: number) => z.string().regex(new RegExp(`^\\d{${min},${max}}$`), `Deve ter entre ${min} e ${max} dígitos numéricos`);
+
 const companyBody = z.object({
-    name: z.string(),
-    document: z.string(),
-    ie: z.string().optional(),
-    cnae: z.string().optional(),
-    crt: z.string().optional(),
-    street: z.string().optional(),
-    number: z.string().optional(),
+    name: z.string().min(2, 'Razão Social é obrigatória'),
+    document: onlyDigits(14).describe('CNPJ — 14 dígitos sem pontuação'),
+    ie: z.string().min(1, 'Inscrição Estadual é obrigatória (use ISENTO se aplicável)'),
+    email: z.string().email('Email inválido').optional(),
+    cnae: onlyDigits(7).optional().or(z.literal('')).optional(),
+    crt: z.enum(['1', '2', '3', '4'], { message: 'CRT deve ser 1, 2, 3 ou 4' }),
+    street: z.string().min(1, 'Logradouro é obrigatório'),
+    number: z.string().min(1, 'Número é obrigatório'),
     complement: z.string().optional(),
-    district: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().optional(),
-    zipCode: z.string().optional(),
-    ibgeCode: z.string().optional(),
+    district: z.string().min(1, 'Bairro é obrigatório'),
+    city: z.string().min(1, 'Cidade é obrigatória'),
+    state: z.string().length(2, 'UF deve ter exatamente 2 letras').toUpperCase(),
+    zipCode: onlyDigits(8).describe('CEP — 8 dígitos sem pontuação'),
+    ibgeCode: onlyDigits(7).describe('Código IBGE do município — 7 dígitos'),
     phone: z.string().optional()
 });
 

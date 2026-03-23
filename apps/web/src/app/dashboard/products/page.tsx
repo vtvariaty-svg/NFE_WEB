@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Plus, Package, Pencil, Trash2 } from "lucide-react";
+import { FieldHint } from "@/components/FieldHint";
 
 interface Product {
     id: string;
@@ -78,8 +79,11 @@ export default function ProductsPage() {
         setIsModalOpen(true);
     };
 
+    const [submitError, setSubmitError] = useState<string | null>(null);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setSubmitError(null);
         try {
             const payload = { ...form, price: parseFloat(form.price) };
             if (editingId) {
@@ -91,8 +95,9 @@ export default function ProductsPage() {
             setEditingId(null);
             setForm(emptyForm);
             fetchProducts();
-        } catch {
-            alert(editingId ? "Erro ao atualizar produto" : "Erro ao criar produto");
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.response?.data?.error || "Erro ao salvar produto.";
+            setSubmitError(typeof msg === "object" ? JSON.stringify(msg) : msg);
         }
     };
 
@@ -195,6 +200,9 @@ export default function ProductsPage() {
                             <h3 className="text-lg font-medium leading-6 text-slate-900 mb-4">
                                 {editingId ? "Editar Produto" : "Novo Produto"}
                             </h3>
+                            {submitError && (
+                                <div className="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">{submitError}</div>
+                            )}
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div className="sm:col-span-2">
@@ -216,16 +224,22 @@ export default function ProductsPage() {
 
                                     <h4 className="sm:col-span-2 text-sm font-bold text-slate-900 mt-2 border-b pb-1">Tributação (NF-e)</h4>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700">NCM <span className="text-red-500">*</span></label>
-                                        <input type="text" value={form.ncm} onChange={set("ncm")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                        <label className="block text-sm font-medium text-slate-700">
+                                            NCM <span className="text-red-500">*</span>
+                                            <FieldHint hint="8 dígitos numéricos. Classifica o produto para fins fiscais. Consulte o NCM do seu produto com seu contador ou na tabela da Receita Federal." link={{ url: "https://www.gov.br/receitafederal/pt-br/assuntos/aduana-e-comercio-exterior/classif-tarifaria/solucoes-de-consulta/consolidadas", label: "Consultar NCM" }} />
+                                        </label>
+                                        <input required type="text" value={form.ncm} onChange={set("ncm")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="Ex: 84713012" maxLength={8} />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700">CEST</label>
                                         <input type="text" value={form.cest} onChange={set("cest")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700">CFOP Padrão</label>
-                                        <input type="text" value={form.cfop} onChange={set("cfop")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="5102, 6102" />
+                                        <label className="block text-sm font-medium text-slate-700">
+                                            CFOP Padrão <span className="text-red-500">*</span>
+                                            <FieldHint hint="4 dígitos. Define a natureza da operação. Venda dentro do estado: 5102. Para outro estado: 6102. Confirme com seu contador." />
+                                        </label>
+                                        <input required type="text" value={form.cfop} onChange={set("cfop")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="5102" maxLength={4} />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700">Origem ICMS</label>
@@ -237,16 +251,25 @@ export default function ProductsPage() {
                                     </div>
                                     <div className="sm:col-span-2 grid grid-cols-3 gap-2">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700">ICMS CST/CSOSN <span className="text-red-500">*</span></label>
-                                            <input type="text" value={form.icmsCst} onChange={set("icmsCst")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="102, 400" />
+                                            <label className="block text-sm font-medium text-slate-700">
+                                                ICMS CST/CSOSN <span className="text-red-500">*</span>
+                                                <FieldHint hint="Simples Nacional: 102 (tributado), 400 (sem débito), 500 (ST anterior). Confirme com seu contador." />
+                                            </label>
+                                            <input required type="text" value={form.icmsCst} onChange={set("icmsCst")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="102, 400" />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700">PIS CST <span className="text-red-500">*</span></label>
-                                            <input type="text" value={form.pisCst} onChange={set("pisCst")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="99, 49" />
+                                            <label className="block text-sm font-medium text-slate-700">
+                                                PIS CST <span className="text-red-500">*</span>
+                                                <FieldHint hint="Simples Nacional: 07 (sem incidência). Lucro Presumido: 01 ou 02." />
+                                            </label>
+                                            <input required type="text" value={form.pisCst} onChange={set("pisCst")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="07, 49" />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700">COFINS CST <span className="text-red-500">*</span></label>
-                                            <input type="text" value={form.cofinsCst} onChange={set("cofinsCst")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="99, 49" />
+                                            <label className="block text-sm font-medium text-slate-700">
+                                                COFINS CST <span className="text-red-500">*</span>
+                                                <FieldHint hint="Simples Nacional: 07 (sem incidência). Lucro Presumido: 01 ou 02." />
+                                            </label>
+                                            <input required type="text" value={form.cofinsCst} onChange={set("cofinsCst")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="07, 49" />
                                         </div>
                                     </div>
                                 </div>

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import api from "@/lib/api";
 import { Plus, Users, Pencil, Trash2 } from "lucide-react";
+import { FieldHint } from "@/components/FieldHint";
+import { useViaCep } from "@/hooks/useViaCep";
 
 interface Customer {
     id: string;
@@ -75,21 +77,45 @@ export default function CustomersPage() {
         setIsModalOpen(true);
     };
 
+    const [submitError, setSubmitError] = useState<string | null>(null);
+
+    const { fetchAddress, loading: cepLoading, error: cepError } = useViaCep(
+        useCallback((address) => {
+            setForm(prev => ({
+                ...prev,
+                street: address.street || prev.street,
+                district: address.district || prev.district,
+                city: address.city || prev.city,
+                state: address.state || prev.state,
+                ibgeCode: address.ibgeCode || prev.ibgeCode,
+            }));
+        }, [])
+    );
+
+    const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value.replace(/\D/g, "").slice(0, 8);
+        setForm(prev => ({ ...prev, zipCode: val }));
+        fetchAddress(val);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setSubmitError(null);
         try {
+            const body = { ...form, document: form.document.replace(/\D/g, ""), zipCode: form.zipCode.replace(/\D/g, "") };
             if (editingId) {
-                const { document, ...updateData } = form;
+                const { document, ...updateData } = body;
                 await api.put(`/fiscal/customers/${editingId}`, updateData);
             } else {
-                await api.post("/fiscal/customers", form);
+                await api.post("/fiscal/customers", body);
             }
             setIsModalOpen(false);
             setEditingId(null);
             setForm(emptyForm);
             fetchCustomers();
-        } catch {
-            alert(editingId ? "Erro ao atualizar cliente" : "Erro ao criar cliente");
+        } catch (err: any) {
+            const msg = err?.response?.data?.message || err?.response?.data?.error || "Erro ao salvar cliente.";
+            setSubmitError(typeof msg === "object" ? JSON.stringify(msg) : msg);
         }
     };
 
@@ -186,6 +212,9 @@ export default function CustomersPage() {
                             <h3 className="text-lg font-medium leading-6 text-slate-900 mb-4">
                                 {editingId ? "Editar Cliente" : "Novo Cliente"}
                             </h3>
+                            {submitError && (
+                                <div className="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">{submitError}</div>
+                            )}
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div className="sm:col-span-2">
@@ -201,12 +230,18 @@ export default function CustomersPage() {
                                         <input type="text" required value={form.name} onChange={set("name")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700">CPF / CNPJ</label>
-                                        <input type="text" required={!editingId} value={form.document} onChange={set("document")} disabled={!!editingId} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border disabled:bg-slate-50 disabled:text-slate-400" />
+                                        <label className="block text-sm font-medium text-slate-700">
+                                            CPF / CNPJ <span className="text-red-500">*</span>
+                                            <FieldHint hint="Somente números. Pessoa física: 11 dígitos. Empresa: 14 dígitos." />
+                                        </label>
+                                        <input type="text" required={!editingId} value={form.document} onChange={set("document")} disabled={!!editingId} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border disabled:bg-slate-50 disabled:text-slate-400" placeholder="11 ou 14 dígitos" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700">Inscrição Estadual (IE)</label>
-                                        <input type="text" placeholder="Deixe em branco se isento" value={form.ie} onChange={set("ie")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                        <label className="block text-sm font-medium text-slate-700">
+                                            Inscrição Estadual (IE)
+                                            <FieldHint hint='Se o cliente for isento de IE, escreva exatamente "ISENTO". Deixe em branco se não tiver.' />
+                                        </label>
+                                        <input type="text" placeholder="Número ou ISENTO" value={form.ie} onChange={set("ie")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700">Inscrição Municipal (IM)</label>
@@ -218,8 +253,15 @@ export default function CustomersPage() {
                                     </div>
                                     <h4 className="sm:col-span-2 text-sm font-bold text-slate-900 mt-2 border-b pb-1">Endereço de Faturamento</h4>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700">CEP</label>
-                                        <input type="text" value={form.zipCode} onChange={set("zipCode")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                        <label className="block text-sm font-medium text-slate-700">
+                                            CEP <span className="text-red-500">*</span>
+                                            <FieldHint hint="Somente 8 dígitos. Ao preencher, o endereço e o Código IBGE serão preenchidos automaticamente!" link={{ url: "https://viacep.com.br", label: "Buscar CEP" }} />
+                                        </label>
+                                        <div className="relative">
+                                            <input type="text" required value={form.zipCode} onChange={handleCepChange} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="00000000" maxLength={8} />
+                                            {cepLoading && <span className="absolute right-3 top-3 text-xs text-blue-500">Buscando...</span>}
+                                        </div>
+                                        {cepError && <p className="mt-1 text-xs text-red-500">{cepError}</p>}
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700">Logradouro / Rua</label>
@@ -241,8 +283,11 @@ export default function CustomersPage() {
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700">Cód IBGE Mun. <span className="text-red-500">*</span></label>
-                                        <input type="text" value={form.ibgeCode} onChange={set("ibgeCode")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                        <label className="block text-sm font-medium text-slate-700">
+                                            Cód IBGE Mun. <span className="text-red-500">*</span>
+                                            <FieldHint hint="7 dígitos. Preenchido automaticamente ao informar o CEP. Para busca manual, acesse ViaCEP." link={{ url: "https://viacep.com.br", label: "Buscar pelo CEP" }} />
+                                        </label>
+                                        <input type="text" required value={form.ibgeCode} onChange={set("ibgeCode")} className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" placeholder="0000000" maxLength={7} />
                                     </div>
                                 </div>
                                 <p className="text-xs text-slate-400">Campos marcados com <span className="text-red-500">*</span> são obrigatórios para emissão de NF-e.</p>

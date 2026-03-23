@@ -108,6 +108,79 @@ export async function nfeRoutes(app: FastifyInstance) {
         const { companyId, orderId, payload } = request.body as any;
         const tenantId = (request as any).tenantId;
         try {
+            // ── Pré-validação fiscal antes de enviar ao SEFAZ ──────────────────
+            const validationErrors: string[] = [];
+            
+            // 1. Validar empresa emissora
+            const company = await prisma.company.findFirst({ where: { id: companyId, tenantId } });
+            if (!company) return reply.status(404).send({ error: 'Empresa não encontrada.' });
+            
+            const companyRequired: Record<string, string | null | undefined> = {
+                'CRT (Regime Tributário)': company.crt,
+                'Inscrição Estadual': company.ie,
+                'Endereço (Logradouro)': company.street,
+                'Endereço (Número)': company.number,
+                'Bairro': company.district,
+                'Cidade': company.city,
+                'UF': company.state,
+                'CEP': company.zipCode,
+                'Código IBGE do Município': company.ibgeCode,
+            };
+            for (const [label, val] of Object.entries(companyRequired)) {
+                if (!val?.trim()) validationErrors.push(`Empresa: campo "${label}" não preenchido`);
+            }
+            if (company.ibgeCode && !/^\d{7}$/.test(company.ibgeCode)) {
+                validationErrors.push('Empresa: Código IBGE deve ter exatamente 7 dígitos numéricos');
+            }
+            if (company.zipCode && !/^\d{8}$/.test(company.zipCode)) {
+                validationErrors.push('Empresa: CEP deve ter exatamente 8 dígitos numéricos');
+            }
+            
+            // 2. Validar produtos do pedido
+            if (orderId) {
+                const order = await prisma.order.findFirst({
+                    where: { id: orderId, tenantId },
+                    include: { items: { include: { product: true } }, customer: true }
+                });
+                if (order) {
+                    for (const item of order.items) {
+                        const p = item.product;
+                        if (!p.ncm?.trim() || !/^\d{8}$/.test(p.ncm)) {
+                            validationErrors.push(`Produto "${p.name}": NCM inválido (deve ter 8 dígitos)`);
+                        }
+                        if (!p.cfop?.trim() || !/^\d{4}$/.test(p.cfop)) {
+                            validationErrors.push(`Produto "${p.name}": CFOP inválido (deve ter 4 dígitos)`);
+                        }
+                        if (!p.icmsCst?.trim()) validationErrors.push(`Produto "${p.name}": CST ICMS não preenchido`);
+                        if (!p.pisCst?.trim()) validationErrors.push(`Produto "${p.name}": CST PIS não preenchido`);
+                        if (!p.cofinsCst?.trim()) validationErrors.push(`Produto "${p.name}": CST COFINS não preenchido`);
+                    }
+                    // 3. Validar destinatário
+                    if (order.customer) {
+                        const c = order.customer;
+                        const destRequired: Record<string, string | null | undefined> = {
+                            'Endereço (Logradouro)': c.street,
+                            'Bairro': c.district,
+                            'Cidade': c.city,
+                            'UF': c.state,
+                            'CEP': c.zipCode,
+                            'Código IBGE': c.ibgeCode,
+                        };
+                        for (const [label, val] of Object.entries(destRequired)) {
+                            if (!val?.trim()) validationErrors.push(`Destinatário: campo "${label}" não preenchido`);
+                        }
+                    }
+                }
+            }
+
+            if (validationErrors.length > 0) {
+                return reply.status(422).send({
+                    error: 'Dados fiscais incompletos. Corrija antes de emitir a NF-e.',
+                    campos: validationErrors
+                });
+            }
+            // ──────────────────────────────────────────────────────────────────
+
             const result = await EmissionService.emitNfe(tenantId, companyId, payload, orderId);
             const httpStatus = result.status === 'AUTHORIZED' ? 200 : 400;
             return reply.status(httpStatus).send({
@@ -118,6 +191,7 @@ export async function nfeRoutes(app: FastifyInstance) {
             return reply.status(500).send({ error: 'Falha grave na emissão de NF-e', details: error.message });
         }
     });
+
 
     // ── GET NF-e by ID ─────────────────────────────────────────────────────────
     app.get('/:id', {
