@@ -1,4 +1,4 @@
-﻿import crypto from 'crypto';
+import crypto from 'crypto';
 import forge from 'node-forge';
 import { prisma } from '../../../../index.js';
 
@@ -113,6 +113,9 @@ export class CertificateService {
             } catch (syncErr: any) {
                 console.error(`[CertificateService] Falha no bootstrap Nuvem Fiscal: ${syncErr.message}`);
                 await this.logUsage(certificate.id, tenantId, 'SYNC_NUVEM_FISCAL_FAILED', syncErr.message);
+                
+                // Throw the error so the frontend can display exactly what failed (e.g. missing IE, etc)
+                throw new Error(`Falha no vínculo com Nuvem Fiscal: ${syncErr.message}`);
             }
         }
 
