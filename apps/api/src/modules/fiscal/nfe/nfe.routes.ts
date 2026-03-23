@@ -69,12 +69,13 @@ export async function nfeRoutes(app: FastifyInstance) {
             await createOrUpdateCompany({
                 cpf_cnpj: cnpjClean,
                 nome_razao_social: company.name,
-                nome_fantasia: (company as any).tradeName ?? company.name,
+                nome_fantasia: company.name,
+                inscricao_estadual: (company as any).ie || undefined,
                 regime_tributario: 'simples_nacional',
                 endereco: {
                     logradouro: (company as any).street || 'Rua',
                     numero: (company as any).number || 'SN',
-                    bairro: (company as any).neighborhood || 'Centro',
+                    bairro: (company as any).district || 'Centro',
                     codigo_municipio: (company as any).ibgeCode || '0000000',
                     cidade: (company as any).city || 'Cidade',
                     uf: (company as any).state || 'SP',
