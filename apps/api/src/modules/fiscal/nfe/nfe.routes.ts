@@ -60,10 +60,35 @@ export async function nfeRoutes(app: FastifyInstance) {
 
             const cnpjClean = company.document.replace(/\D/g, '');
             const pfxBase64 = cert.pfxBuffer.toString('base64');
-            const { uploadCertificate } = await import('../providers/nuvemFiscal/nuvem-fiscal.bootstrap.js');
+            const defaultAmbiente = (process.env.NUVEM_FISCAL_DEFAULT_AMBIENTE as 'homologacao' | 'producao') ?? 'homologacao';
+
+            const { createOrUpdateCompany, uploadCertificate, configureNfeService } =
+                await import('../providers/nuvemFiscal/nuvem-fiscal.bootstrap.js');
+
+            // Step 1: Register company
+            await createOrUpdateCompany({
+                cpf_cnpj: cnpjClean,
+                nome_razao_social: company.name,
+                nome_fantasia: (company as any).tradeName ?? company.name,
+                regime_tributario: 'simples_nacional',
+                endereco: {
+                    logradouro: (company as any).street || 'Rua',
+                    numero: (company as any).number || 'SN',
+                    bairro: (company as any).neighborhood || 'Centro',
+                    codigo_municipio: (company as any).ibgeCode || '0000000',
+                    cidade: (company as any).city || 'Cidade',
+                    uf: (company as any).state || 'SP',
+                    cep: ((company as any).zipCode || '00000000').replace(/\D/g, '')
+                }
+            });
+
+            // Step 2: Upload certificate
             await uploadCertificate(cnpjClean, pfxBase64, cert.password);
 
-            return reply.send({ message: 'Certificado sincronizado com a Nuvem Fiscal com sucesso.' });
+            // Step 3: Configure NF-e service
+            await configureNfeService(cnpjClean, { ambiente: defaultAmbiente });
+
+            return reply.send({ message: 'Bootstrap Nuvem Fiscal concluído: empresa, certificado e configuração NF-e sincronizados.' });
         } catch (error: any) {
             return reply.status(500).send({ error: 'Falha ao sincronizar certificado', details: error.message });
         }

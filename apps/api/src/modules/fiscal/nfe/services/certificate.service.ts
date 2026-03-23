@@ -67,7 +67,7 @@ export class CertificateService {
         // 6. Log the upload
         await this.logUsage(certificate.id, tenantId, 'UPLOADED', `Certificado A1 carregado: ${certParams.subjectName}`);
 
-        // 7. Sync to Nuvem Fiscal if the provider is active (fire-and-forget with warn logging)
+        // 7. Sync to Nuvem Fiscal if the provider is active — full 3-step bootstrap
         const isNuvemFiscal =
             process.env.NUVEM_FISCAL_ENABLED === 'true' ||
             process.env.FISCAL_PROVIDER === 'nuvem_fiscal';
@@ -76,18 +76,45 @@ export class CertificateService {
             const cnpjClean = company.document.replace(/\D/g, '');
             const pfxBase64 = pfxBuffer.toString('base64');
             try {
-                const { uploadCertificate } = await import(
-                    '../../providers/nuvemFiscal/nuvem-fiscal.bootstrap.js'
-                );
+                const {
+                    createOrUpdateCompany,
+                    uploadCertificate,
+                    configureNfeService
+                } = await import('../../providers/nuvemFiscal/nuvem-fiscal.bootstrap.js');
+
+                const defaultAmbiente = (process.env.NUVEM_FISCAL_DEFAULT_AMBIENTE as 'homologacao' | 'producao') ?? 'homologacao';
+
+                // Step 1: Register company (idempotent)
+                await createOrUpdateCompany({
+                    cpf_cnpj: cnpjClean,
+                    nome_razao_social: company.name,
+                    nome_fantasia: (company as any).tradeName ?? company.name,
+                    regime_tributario: 'simples_nacional',
+                    endereco: {
+                        logradouro: (company as any).street || 'Rua',
+                        numero: (company as any).number || 'SN',
+                        bairro: (company as any).neighborhood || 'Centro',
+                        codigo_municipio: (company as any).ibgeCode || '0000000',
+                        cidade: (company as any).city || 'Cidade',
+                        uf: (company as any).state || 'SP',
+                        cep: ((company as any).zipCode || '00000000').replace(/\D/g, '')
+                    }
+                });
+
+                // Step 2: Upload certificate
                 await uploadCertificate(cnpjClean, pfxBase64, password);
-                console.info(`[CertificateService] Certificado sincronizado com Nuvem Fiscal para CNPJ ${cnpjClean}`);
-                await this.logUsage(certificate.id, tenantId, 'SYNCED_NUVEM_FISCAL', 'Certificado enviado à Nuvem Fiscal com sucesso');
+
+                // Step 3: Configure NF-e service
+                await configureNfeService(cnpjClean, { ambiente: defaultAmbiente });
+
+                console.info(`[CertificateService] Bootstrap Nuvem Fiscal concluído para CNPJ ${cnpjClean}`);
+                await this.logUsage(certificate.id, tenantId, 'SYNCED_NUVEM_FISCAL', 'Bootstrap completo: empresa + certificado + NF-e config enviados à Nuvem Fiscal');
             } catch (syncErr: any) {
-                console.error(`[CertificateService] Falha ao sincronizar certificado com Nuvem Fiscal: ${syncErr.message}`);
+                console.error(`[CertificateService] Falha no bootstrap Nuvem Fiscal: ${syncErr.message}`);
                 await this.logUsage(certificate.id, tenantId, 'SYNC_NUVEM_FISCAL_FAILED', syncErr.message);
-                // We do NOT re-throw — local save succeeded; user can retry the sync
             }
         }
+
 
         return {
             id: certificate.id,
