@@ -38,6 +38,37 @@ export async function nfeRoutes(app: FastifyInstance) {
         }
     });
 
+    // ── CERTIFICATE SYNC TO NUVEM FISCAL ──────────────────────────────────────
+    // For cases where the cert is already in the DB but was not synced to the provider
+    app.post('/:companyId/certificates/sync-nuvem-fiscal', {
+        schema: {
+            params: z.object({ companyId: z.string().uuid() })
+        }
+    }, async (request, reply) => {
+        const { companyId } = request.params as any;
+        const tenantId = (request as any).tenantId;
+        try {
+            const isNuvemFiscal =
+                process.env.NUVEM_FISCAL_ENABLED === 'true' ||
+                process.env.FISCAL_PROVIDER === 'nuvem_fiscal';
+            if (!isNuvemFiscal) {
+                return reply.status(400).send({ error: 'Nuvem Fiscal não está habilitada.' });
+            }
+            const cert = await CertificateService.getActiveCert(tenantId, companyId);
+            const company = await prisma.company.findFirst({ where: { id: companyId, tenantId } });
+            if (!company) return reply.status(404).send({ error: 'Empresa não encontrada.' });
+
+            const cnpjClean = company.document.replace(/\D/g, '');
+            const pfxBase64 = cert.pfxBuffer.toString('base64');
+            const { uploadCertificate } = await import('../providers/nuvemFiscal/nuvem-fiscal.bootstrap.js');
+            await uploadCertificate(cnpjClean, pfxBase64, cert.password);
+
+            return reply.send({ message: 'Certificado sincronizado com a Nuvem Fiscal com sucesso.' });
+        } catch (error: any) {
+            return reply.status(500).send({ error: 'Falha ao sincronizar certificado', details: error.message });
+        }
+    });
+
     // ── EMISSION ───────────────────────────────────────────────────────────────
     app.post('/emit', {
         schema: {

@@ -67,6 +67,28 @@ export class CertificateService {
         // 6. Log the upload
         await this.logUsage(certificate.id, tenantId, 'UPLOADED', `Certificado A1 carregado: ${certParams.subjectName}`);
 
+        // 7. Sync to Nuvem Fiscal if the provider is active (fire-and-forget with warn logging)
+        const isNuvemFiscal =
+            process.env.NUVEM_FISCAL_ENABLED === 'true' ||
+            process.env.FISCAL_PROVIDER === 'nuvem_fiscal';
+
+        if (isNuvemFiscal) {
+            const cnpjClean = company.document.replace(/\D/g, '');
+            const pfxBase64 = pfxBuffer.toString('base64');
+            try {
+                const { uploadCertificate } = await import(
+                    '../../providers/nuvemFiscal/nuvem-fiscal.bootstrap.js'
+                );
+                await uploadCertificate(cnpjClean, pfxBase64, password);
+                console.info(`[CertificateService] Certificado sincronizado com Nuvem Fiscal para CNPJ ${cnpjClean}`);
+                await this.logUsage(certificate.id, tenantId, 'SYNCED_NUVEM_FISCAL', 'Certificado enviado à Nuvem Fiscal com sucesso');
+            } catch (syncErr: any) {
+                console.error(`[CertificateService] Falha ao sincronizar certificado com Nuvem Fiscal: ${syncErr.message}`);
+                await this.logUsage(certificate.id, tenantId, 'SYNC_NUVEM_FISCAL_FAILED', syncErr.message);
+                // We do NOT re-throw — local save succeeded; user can retry the sync
+            }
+        }
+
         return {
             id: certificate.id,
             thumbprint: certificate.thumbprint,
