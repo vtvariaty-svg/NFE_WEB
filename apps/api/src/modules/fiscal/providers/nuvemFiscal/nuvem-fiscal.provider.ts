@@ -228,7 +228,7 @@ export class NuvemFiscalProvider implements IFiscalProvider {
                 },
                 emit: {
                     CNPJ: p.cnpj_emitente,
-                    xEmit: "Raza social omitida", 
+                    xNome: "Raza social omitida", 
                     // To successfully emit, Nuvem Fiscal needs complete issuer details OR relies on the configured one.
                     enderEmit: {
                         xLgr: "Rua",
