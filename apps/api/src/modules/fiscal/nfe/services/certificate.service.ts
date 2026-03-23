@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+﻿import crypto from 'crypto';
 import forge from 'node-forge';
 import { prisma } from '../../../../index.js';
 
@@ -18,23 +18,23 @@ export class CertificateService {
         const certParams = this.extractPfxDetails(pfxBuffer, password);
 
         if (!certParams.thumbprint) {
-            throw new Error('Falha ao processar o certificado. Certifique-se de ser um e-CNPJ (A1) válido.');
+            throw new Error('Falha ao processar o certificado. Certifique-se de ser um e-CNPJ (A1) vÃ¡lido.');
         }
 
-        // 2. Validate against Company document (CNPJ) — only when CNPJ could be extracted
+        // 2. Validate against Company document (CNPJ) â€” only when CNPJ could be extracted
         const company = await prisma.company.findFirst({
             where: { id: companyId, tenantId }
         });
 
         if (!company) {
-            throw new Error('Empresa não encontrada neste tenant.');
+            throw new Error('Empresa nÃ£o encontrada neste tenant.');
         }
 
         if (certParams.subjectCnpj) {
             const cleanCompanyCnpj = company.document.replace(/\D/g, '');
             const cleanCertCnpj = certParams.subjectCnpj.replace(/\D/g, '');
             if (cleanCompanyCnpj !== cleanCertCnpj) {
-                throw new Error(`O CNPJ do certificado (${cleanCertCnpj}) não corresponde ao CNPJ da empresa (${cleanCompanyCnpj}).`);
+                throw new Error(`O CNPJ do certificado (${cleanCertCnpj}) nÃ£o corresponde ao CNPJ da empresa (${cleanCompanyCnpj}).`);
             }
         }
 
@@ -67,7 +67,7 @@ export class CertificateService {
         // 6. Log the upload
         await this.logUsage(certificate.id, tenantId, 'UPLOADED', `Certificado A1 carregado: ${certParams.subjectName}`);
 
-        // 7. Sync to Nuvem Fiscal if the provider is active — full 3-step bootstrap
+        // 7. Sync to Nuvem Fiscal if the provider is active â€” full 3-step bootstrap
         const isNuvemFiscal =
             process.env.NUVEM_FISCAL_ENABLED === 'true' ||
             process.env.FISCAL_PROVIDER === 'nuvem_fiscal';
@@ -108,8 +108,8 @@ export class CertificateService {
                 // Step 3: Configure NF-e service
                 await configureNfeService(cnpjClean, { ambiente: defaultAmbiente });
 
-                console.info(`[CertificateService] Bootstrap Nuvem Fiscal concluído para CNPJ ${cnpjClean}`);
-                await this.logUsage(certificate.id, tenantId, 'SYNCED_NUVEM_FISCAL', 'Bootstrap completo: empresa + certificado + NF-e config enviados à Nuvem Fiscal');
+                console.info(`[CertificateService] Bootstrap Nuvem Fiscal concluÃ­do para CNPJ ${cnpjClean}`);
+                await this.logUsage(certificate.id, tenantId, 'SYNCED_NUVEM_FISCAL', 'Bootstrap completo: empresa + certificado + NF-e config enviados Ã  Nuvem Fiscal');
             } catch (syncErr: any) {
                 console.error(`[CertificateService] Falha no bootstrap Nuvem Fiscal: ${syncErr.message}`);
                 await this.logUsage(certificate.id, tenantId, 'SYNC_NUVEM_FISCAL_FAILED', syncErr.message);
@@ -127,7 +127,7 @@ export class CertificateService {
     }
 
     /**
-     * Renew certificate — upload new PFX, deactivate old, log RENEWED
+     * Renew certificate â€” upload new PFX, deactivate old, log RENEWED
      */
     static async renewCertificate(tenantId: string, companyId: string, pfxBuffer: Buffer, password: string, label?: string) {
         const oldCert = await prisma.certificate.findFirst({
@@ -143,7 +143,7 @@ export class CertificateService {
 
         // Log renewal (linked to new cert)
         await this.logUsage(result.id, tenantId, 'RENEWED',
-            oldCert ? `Renovação do certificado ${oldCert.thumbprint}` : 'Primeiro certificado'
+            oldCert ? `RenovaÃ§Ã£o do certificado ${oldCert.thumbprint}` : 'Primeiro certificado'
         );
 
         return result;
@@ -154,14 +154,14 @@ export class CertificateService {
      */
     static async revokeCertificate(tenantId: string, certId: string) {
         const cert = await prisma.certificate.findFirst({ where: { id: certId, tenantId } });
-        if (!cert) throw new Error('Certificado não encontrado.');
+        if (!cert) throw new Error('Certificado nÃ£o encontrado.');
 
         await prisma.certificate.update({
             where: { id: certId },
             data: { isActive: false, revokedAt: new Date() }
         });
 
-        await this.logUsage(certId, tenantId, 'REVOKED', 'Certificado revogado pelo usuário');
+        await this.logUsage(certId, tenantId, 'REVOKED', 'Certificado revogado pelo usuÃ¡rio');
         return { success: true };
     }
 
@@ -186,7 +186,7 @@ export class CertificateService {
         // Expiration Check
         if (certRecord.validTo && certRecord.validTo < new Date()) {
             await this.logUsage(certRecord.id, tenantId, 'EXPIRED_BLOCKED', 'Tentativa de uso de certificado expirado');
-            throw new Error('O certificado vinculado à empresa está expirado.');
+            throw new Error('O certificado vinculado Ã  empresa estÃ¡ expirado.');
         }
 
         const payload = this.decryptPfxPass(certRecord.pfxEncrypted, certRecord.pfxIv, certRecord.pfxSalt);
@@ -212,138 +212,74 @@ export class CertificateService {
 
     // --- Private / Internal Helpers ---
 
-    private static extractPfxDetails(pfxBuffer: Buffer, password: string) {
-        // ── Step 1: Validate password via Node.js native TLS (OpenSSL) ──────────
-        // This supports all modern PFX formats including SHA-256 MAC (ICP-Brasil A1).
-        // node-forge only supports SHA-1 MAC — modern certs will fail with forge alone.
+
+    /** Try Node.js native TLS validation (handles modern SHA-256 MAC certs). */
+    private static tryValidateWithTls(pfxBuffer: Buffer, password: string): boolean {
         try {
             const tls = require('tls');
             tls.createSecureContext({ pfx: pfxBuffer, passphrase: password });
-        } catch (tlsErr: any) {
-            throw new Error(`Senha do certificado incorreta ou arquivo PFX inválido: ${tlsErr.message}`);
-        }
+            return true;
+        } catch { return false; }
+    }
 
-        // ── Step 2: Parse metadata using node-forge ──────────────────────────────
-        // For SHA-256 MAC certs, forge MAC check fails. Workaround: try with password
-        // first; on failure, try with empty password (MAC skipped) to extract cert bags
-        // since the certificate itself is NOT encrypted in PKCS#12 – only the private key is.
-        let cert: forge.pki.Certificate | null = null;
-        let privateKeyExists = false;
-
-        const tryForge = (pwd: string) => {
-            try {
-                const p12Asn1 = forge.asn1.fromDer(pfxBuffer.toString('binary'));
-                const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, pwd);
-                for (const safeContents of p12.safeContents) {
-                    for (const safeBag of safeContents.safeBags) {
-                        if (safeBag.type === forge.pki.oids.certBag && safeBag.cert) {
-                            cert = safeBag.cert as forge.pki.Certificate;
-                        } else if (
-                            safeBag.type === forge.pki.oids.pkcs8ShroudedKeyBag ||
-                            safeBag.type === forge.pki.oids.keyBag
-                        ) {
-                            privateKeyExists = true;
-                        }
-                    }
+    /** Try to parse a PFX with node-forge (handles legacy RC2/3DES certs). */
+    private static tryParseWithForge(pfxBuffer: Buffer, password: string) {
+        try {
+            const p12Asn1 = forge.asn1.fromDer(pfxBuffer.toString('binary'));
+            const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, password);
+            let cert: forge.pki.Certificate | null = null;
+            let pkExists = false;
+            for (const sc of p12.safeContents) {
+                for (const sb of sc.safeBags) {
+                    if (sb.type === forge.pki.oids.certBag && sb.cert) cert = sb.cert as forge.pki.Certificate;
+                    else if (sb.type === forge.pki.oids.pkcs8ShroudedKeyBag || sb.type === forge.pki.oids.keyBag) pkExists = true;
                 }
-                return true;
-            } catch {
-                return false;
             }
-        };
-
-        // Try 1: normal (SHA-1 MAC certs)
-        // Try 2: empty string password for forge MAC (SHA-256 MAC certs — password already validated by TLS above)
-        const forgeOk = tryForge(password) || tryForge('');
-
-        // ── Step 3: Extract thumbprint and metadata ───────────────────────────────
-        let thumbprint: string;
-        let validFrom: Date;
-        let validTo: Date;
-        let subjectCnpj = '';
-        let subjectName = '';
-
-        if (cert && forgeOk) {
-            // Full forge metadata extraction
+            if (!cert) return null;
+            if (!pkExists && password !== '') return null;
             const certDer = forge.asn1.toDer(forge.pki.certificateToAsn1(cert)).getBytes();
-            const md = forge.md.sha1.create();
-            md.update(certDer);
-            thumbprint = md.digest().toHex().toUpperCase();
-
-            validFrom = (cert as any).validity.notBefore;
-            validTo = (cert as any).validity.notAfter;
-
+            const md = forge.md.sha1.create(); md.update(certDer);
+            const thumbprint = md.digest().toHex().toUpperCase();
+            const validFrom = (cert as any).validity.notBefore as Date;
+            const validTo   = (cert as any).validity.notAfter  as Date;
+            let subjectCnpj = '', subjectName = '';
             const cnObj = (cert as any).subject.getField('CN');
             if (cnObj?.value) {
-                const cnString = cnObj.value.toString();
-                const match = cnString.match(/^(.*?):(\d{14})$/);
-                if (match) {
-                    subjectName = match[1].trim();
-                    subjectCnpj = match[2];
-                } else {
-                    const fallback = cnString.match(/(\d{14})/);
-                    if (fallback) { subjectCnpj = fallback[1]; }
-                    subjectName = cnString;
-                }
+                const s = cnObj.value.toString();
+                const m = s.match(/^(.*?):(\d{14})$/);
+                if (m) { subjectName = m[1].trim(); subjectCnpj = m[2]; }
+                else { const f = s.match(/(\d{14})/); if (f) subjectCnpj = f[1]; subjectName = s; }
             }
+            if (!subjectCnpj) { const sn = (cert as any).subject.getField({ type: '2.5.4.5' }); if (sn?.value) subjectCnpj = sn.value.toString().replace(/\D/g, '').slice(0, 14); }
+            if (!subjectCnpj) { for (const a of (cert as any).subject.attributes) { if (a.type === '2.16.76.1.3.3') { const v = (a.value ?? '').toString().replace(/\D/g, ''); if (v.length === 14) { subjectCnpj = v; break; } } } }
+            if (!subjectCnpj) { try { const se = (cert as any).getExtension('subjectAltName') as any; if (se?.altNames) { for (const an of se.altNames) { if (an.type === 0) { const d = (an.value ?? '').toString().replace(/\D/g, ''); if (d.length >= 14) { subjectCnpj = d.slice(-14); break; } } } } } catch { /* ignore */ } }
+            if (!subjectCnpj) { for (const a of (cert as any).subject.attributes) { const v = (a.value ?? '').toString().replace(/\D/g, ''); if (v.length === 14) { subjectCnpj = v; break; } } }
+            return { thumbprint, validFrom, validTo, subjectCnpj, subjectName };
+        } catch { return null; }
+    }
 
-            if (!subjectCnpj) {
-                const snObj = (cert as any).subject.getField({ type: '2.5.4.5' });
-                if (snObj?.value) {
-                    subjectCnpj = snObj.value.toString().replace(/\D/g, '').slice(0, 14);
-                }
-            }
+    private static extractPfxDetails(pfxBuffer: Buffer, password: string) {
+        // ICP-Brasil A1 certs: Legacy (RC2/3DES) = OpenSSL 3.0+ rejects, forge handles
+        //                      Modern (SHA-256 MAC) = forge MAC check fails, TLS handles
+        // Try both — accept whichever succeeds.
 
-            if (!subjectCnpj) {
-                for (const attr of (cert as any).subject.attributes) {
-                    if (attr.type === '2.16.76.1.3.3') {
-                        const val = (attr.value ?? '').toString().replace(/\D/g, '');
-                        if (val.length === 14) { subjectCnpj = val; break; }
-                    }
-                }
-            }
+        // 1) Try forge with actual password (legacy + modern SHA-1 MAC certs)
+        const r1 = CertificateService.tryParseWithForge(pfxBuffer, password);
+        if (r1) return r1;
 
-            if (!subjectCnpj) {
-                try {
-                    const sanExt = (cert as any).getExtension('subjectAltName') as any;
-                    if (sanExt?.altNames) {
-                        for (const altName of sanExt.altNames) {
-                            if (altName.type === 0) {
-                                const digits = (altName.value ?? '').toString().replace(/\D/g, '');
-                                if (digits.length >= 14) { subjectCnpj = digits.slice(-14); break; }
-                            }
-                        }
-                    }
-                } catch { /* ignore */ }
-            }
-
-            if (!subjectCnpj) {
-                for (const attr of (cert as any).subject.attributes) {
-                    const val = (attr.value ?? '').toString().replace(/\D/g, '');
-                    if (val.length === 14) { subjectCnpj = val; break; }
-                }
-            }
-
-            // ── private key existence: if forge couldn't parse key bags (encrypted with
-            //    AES-256 unsupported by forge), TLS validation above confirms key is there
-            if (!privateKeyExists) {
-                privateKeyExists = true; // TLS already validated key+cert pair
-            }
-        } else {
-            // Forge couldn't parse at all — TLS already confirmed the PFX is valid.
-            // Generate thumbprint from the raw buffer as a stable identifier.
-            thumbprint = crypto.createHash('sha1').update(pfxBuffer).digest('hex').toUpperCase();
-            validFrom = new Date();
-            validTo = new Date(Date.now() + 3 * 365 * 24 * 60 * 60 * 1000); // ~3 years
-            privateKeyExists = true; // TLS confirmed
-            console.warn('[CertificateService] forge could not parse PFX metadata; using minimal info. TLS validation passed.');
+        // 2) Try TLS (modern SHA-256 MAC certs that forge cannot verify)
+        if (CertificateService.tryValidateWithTls(pfxBuffer, password)) {
+            const r2 = CertificateService.tryParseWithForge(pfxBuffer, '');
+            if (r2) return r2;
+            const thumbprint = crypto.createHash('sha1').update(pfxBuffer).digest('hex').toUpperCase();
+            console.warn('[CertificateService] forge could not parse cert metadata; TLS OK, using minimal info.');
+            return { thumbprint, validFrom: new Date(), validTo: new Date(Date.now() + 3 * 365 * 24 * 60 * 60 * 1000), subjectCnpj: '', subjectName: '' };
         }
 
-        if (!thumbprint!) {
-            thumbprint = crypto.createHash('sha1').update(pfxBuffer).digest('hex').toUpperCase();
-        }
-
-        return { thumbprint, validFrom: validFrom!, validTo: validTo!, subjectCnpj, subjectName };
+        // 3) Both failed — determine cause
+        const r3 = CertificateService.tryParseWithForge(pfxBuffer, '');
+        if (r3) throw new Error('Senha do certificado incorreta. Verifique a senha do arquivo PFX.');
+        throw new Error('Arquivo PFX nao suportado ou corrompido. Certifique-se de que e um certificado A1 valido no formato PFX/P12.');
     }
 
 
