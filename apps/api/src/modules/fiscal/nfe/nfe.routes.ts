@@ -71,11 +71,12 @@ export async function nfeRoutes(app: FastifyInstance) {
                 nome_razao_social: company.name,
                 nome_fantasia: company.name,
                 inscricao_estadual: (company as any).ie || undefined,
+                email: (company as any).email || 'nfe@empresa.com.br',
                 endereco: {
                     logradouro: (company as any).street || 'Rua',
                     numero: (company as any).number || 'SN',
                     bairro: (company as any).district || 'Centro',
-                    codigo_municipio: (company as any).ibgeCode || '0000000',
+                    codigo_municipio: String((company as any).ibgeCode || '0000000').replace(/\D/g, '').padEnd(7, '0').slice(0, 7),
                     cidade: (company as any).city || 'Cidade',
                     uf: (company as any).state || 'SP',
                     cep: ((company as any).zipCode || '00000000').replace(/\D/g, '')
