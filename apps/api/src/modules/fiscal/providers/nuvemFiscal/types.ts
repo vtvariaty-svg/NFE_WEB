@@ -114,7 +114,7 @@ export interface NuvemFiscalNfeItem {
 export interface NuvemFiscalNfePayload {
     ambiente: NuvemFiscalNfeAmbiente;
     referencia?: string;
-    inf_nfe: any;
+    infNFe: any;
 }
 
 export type NuvemFiscalNfeStatus =

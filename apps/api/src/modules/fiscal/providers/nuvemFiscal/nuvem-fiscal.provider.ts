@@ -220,7 +220,7 @@ export class NuvemFiscalProvider implements IFiscalProvider {
         return {
             ambiente: defaultAmbiente,
             referencia: p.referencia,
-            inf_nfe: {
+            infNFe: {
                 ide: {
                     natOp: p.natureza_operacao,
                     tpNF: p.tipo_documento === 1 ? 1 : 0,
