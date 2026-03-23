@@ -115,7 +115,9 @@ export class CertificateService {
                 await this.logUsage(certificate.id, tenantId, 'SYNC_NUVEM_FISCAL_FAILED', syncErr.message);
                 
                 // Throw the error so the frontend can display exactly what failed (e.g. missing IE, etc)
-                throw new Error(`Falha no vínculo com Nuvem Fiscal: ${syncErr.message}`);
+                const errorStr = typeof syncErr.message === 'object' ? JSON.stringify(syncErr.message) : syncErr.message;
+                const detailStr = syncErr.detail ? JSON.stringify(syncErr.detail) : '';
+                throw new Error(`Falha no vínculo/Nuvem Fiscal: ${errorStr} ${detailStr}`);
             }
         }
 
