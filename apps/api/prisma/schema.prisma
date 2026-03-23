@@ -103,6 +103,7 @@ model Company {
   zipCode    String? // CEP
   ibgeCode   String? // Código IBGE do município
   phone      String?
+  email      String? // Email para comunicações fiscais
   cPais      String  @default("1058") // Brasil
   xPais      String  @default("Brasil")
 
