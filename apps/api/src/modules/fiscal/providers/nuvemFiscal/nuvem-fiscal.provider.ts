@@ -329,7 +329,7 @@ export class NuvemFiscalProvider implements IFiscalProvider {
                         },
                         imposto: {
                             ICMS: {
-                                ICMSSN400: {
+                                ICMSSN102: {
                                     orig: Number(item.icms_origem) || 0,
                                     CSOSN: validCSO
                                 }
