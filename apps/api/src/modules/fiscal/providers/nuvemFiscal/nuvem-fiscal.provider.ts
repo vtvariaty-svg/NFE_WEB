@@ -335,10 +335,10 @@ export class NuvemFiscalProvider implements IFiscalProvider {
                                 }
                             },
                             PIS: {
-                                PISAliq: { CST: '07', vBC: 0, pPIS: 0, vPIS: 0 }
+                                PISNT: { CST: '07' }
                             },
                             COFINS: {
-                                COFINSAliq: { CST: '07', vBC: 0, pCOFINS: 0, vCOFINS: 0 }
+                                COFINSNT: { CST: '07' }
                             }
                         }
                     };
