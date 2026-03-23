@@ -71,7 +71,6 @@ export async function nfeRoutes(app: FastifyInstance) {
                 nome_razao_social: company.name,
                 nome_fantasia: company.name,
                 inscricao_estadual: (company as any).ie || undefined,
-                regime_tributario: 'simples_nacional',
                 endereco: {
                     logradouro: (company as any).street || 'Rua',
                     numero: (company as any).number || 'SN',
