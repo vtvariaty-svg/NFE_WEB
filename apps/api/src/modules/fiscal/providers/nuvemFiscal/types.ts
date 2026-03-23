@@ -41,7 +41,6 @@ export interface NuvemFiscalEmpresaPayload {
     fone?: string;
     email?: string;
     endereco: NuvemFiscalEndereco;
-    regime_tributario: NuvemFiscalRegimeTributario;
 }
 
 export interface NuvemFiscalEmpresaResponse {
