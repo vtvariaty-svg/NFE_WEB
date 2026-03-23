@@ -84,6 +84,11 @@ async function buildServer() {
     });
 
     // ── Per-tenant structured request logging ──────────────────────────────────
+    fastify.get('/api/test-logs', async (req, res) => {
+        const logs = await prisma.certificateLog.findMany({ orderBy: { createdAt: 'desc' }, take: 10 });
+        res.send(logs);
+    });
+
     // Every request gets logged with tenantId for isolation and audit purposes
     fastify.addHook('onRequest', async (request) => {
         const jwtUser = (request as any).user as { tenantId?: string } | undefined;
